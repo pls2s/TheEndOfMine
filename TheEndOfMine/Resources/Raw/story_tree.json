@@ -1,0 +1,1837 @@
+{
+  "_meta": {
+    "game": "The End of Mine",
+    "version": "1.0.0",
+    "description": "Story tree JSON — ทุก event, choice และผลลัพธ์ที่ส่งผลต่อตอนจบ",
+    "time_note": "1 real second = 1 game minute | Happy ending reachable ~45 real minutes",
+    "day_structure": "Day 1: exploration + radio | Day 2: intel + signal | Day 3: rescue",
+    "flag_types": {
+      "boolean": "true/false สำหรับเหตุการณ์ที่เกิดขึ้นหรือการตัดสินใจที่ทำไปแล้ว",
+      "integer": "ค่านับ เช่น bite_count, bad_choice_streak, helped_count"
+    }
+  },
+  "default_flags": {
+    "found_radio": false,
+    "repaired_radio": false,
+    "knows_evacuation_point": false,
+    "signaled_helicopter": false,
+    "helped_neighbor": false,
+    "ignored_neighbor": false,
+    "neighbor_alive": true,
+    "found_lab_notes": false,
+    "talked_to_friendly_survivor": false,
+    "robbed_survivor": false,
+    "hostile_survivor_dead": false,
+    "hostile_survivor_befriended": false,
+    "escaped_hostile_group": false,
+    "rooftop_unlocked": false,
+    "barricaded_door": false,
+    "witnessed_violence": false,
+    "condo_explored": false,
+    "store_looted": false,
+    "station_explored": false,
+    "clinic_explored": false,
+    "found_diary": false,
+    "bad_choice_streak": 0,
+    "good_choice_streak": 0,
+    "bite_count": 0,
+    "abandoned_child": false,
+    "found_immune_child": false
+  },
+  "ending_conditions": {
+    "ending_1_new_world": {
+      "label": "ตอนจบที่ 1 — ยอมรับโลกใหม่",
+      "trigger": "ผู้เล่นเลือกอยู่ต่อเมื่อเฮลิคอปเตอร์มาถึง หรือผ่านวันที่ 7 โดยไม่พบตอนจบอื่น",
+      "condition": {
+        "event_reached": "evt_rescue_stay_choice"
+      }
+    },
+    "ending_2_death": {
+      "label": "ตอนจบที่ 2 — ตาย",
+      "trigger": "HP = 0 หรือ bad_choice_streak >= 3",
+      "condition": {
+        "hp": 0,
+        "or": {
+          "flag": "bad_choice_streak",
+          "gte": 3
+        }
+      }
+    },
+    "ending_3_zombie": {
+      "label": "ตอนจบที่ 3 — กลายเป็นซอมบี้",
+      "trigger_easy": {
+        "flag": "bite_count",
+        "gte": 20
+      },
+      "trigger_normal": {
+        "flag": "bite_count",
+        "gte": 10
+      },
+      "trigger_hard": {
+        "flag": "bite_count",
+        "gte": 3
+      }
+    },
+    "ending_5_hope": {
+      "label": "ตอนจบที่ 5 — ความหวัง (วัคซีน)",
+      "trigger": "ผู้เล่นไปกับเฮลิคอปเตอร์ + มี found_lab_notes",
+      "condition": {
+        "event_reached": "evt_rescue_go_choice",
+        "flag_true": "found_lab_notes"
+      }
+    },
+    "ending_4_sacrifice": {
+      "label": "ตอนจบที่ 4 — การเสียสละ",
+      "trigger": "ผู้เล่นไปกับเฮลิคอปเตอร์โดยไม่มี found_lab_notes → พบเด็กที่มีภูมิคุ้มกัน → เลือกเสียสละตัวเองเพื่อให้เด็กรอด",
+      "condition": {
+        "event_reached": "evt_sacrifice_choice",
+        "flag_false": "found_lab_notes"
+      }
+    },
+    "ending_4b_escape_coward": {
+      "label": "ตอนจบที่ 4b — ผู้รอดชีวิตขี้ขลาด",
+      "trigger": "ผู้เล่นเลือกทิ้งเด็กไว้บนดาดฟ้า",
+      "condition": {
+        "event_reached": "evt_ending_escape_coward",
+        "flag_true": "abandoned_child"
+      }
+    }
+  },
+  "location_event_map": {
+    "_note": "แต่ละ location จะ trigger event ตาม conditions — ถ้าไม่มี condition ที่ match จะ trigger event ธรรมดา (หาของ)",
+    "condo_halls": {
+      "first_visit": "evt_condo_hallway_first",
+      "random_events": [
+        "evt_zombie_in_hallway",
+        "evt_find_dead_body",
+        "evt_hear_cry_room406"
+      ],
+      "story_events": [
+        {
+          "event": "evt_room_406_knock",
+          "condition": {
+            "day": 1,
+            "time_before": "20:00",
+            "flag_false": "condo_explored"
+          }
+        },
+        {
+          "event": "evt_rooftop_access",
+          "condition": {
+            "flag_true": "knows_evacuation_point"
+          }
+        }
+      ]
+    },
+    "convenience_store": {
+      "first_visit": "evt_store_first_visit",
+      "random_events": [
+        "evt_store_zombie_ambush",
+        "evt_store_empty_shelves"
+      ],
+      "story_events": [
+        {
+          "event": "evt_store_survivor_encounter",
+          "condition": {
+            "day": 1,
+            "flag_false": "talked_to_friendly_survivor",
+            "flag_false_2": "store_looted"
+          }
+        }
+      ]
+    },
+    "police_station": {
+      "first_visit": "evt_station_entrance",
+      "random_events": [
+        "evt_station_zombie_patrol",
+        "evt_station_find_weapons"
+      ],
+      "story_events": [
+        {
+          "event": "evt_hostile_survivor_encounter",
+          "condition": {
+            "flag_false": "hostile_survivor_dead",
+            "flag_false_2": "hostile_survivor_befriended"
+          }
+        },
+        {
+          "event": "evt_station_armory",
+          "condition": {
+            "flag_true": "hostile_survivor_befriended"
+          }
+        }
+      ]
+    },
+    "clinic": {
+      "first_visit": "evt_clinic_entrance",
+      "random_events": [
+        "evt_clinic_zombie_patient",
+        "evt_clinic_medicine_hunt"
+      ],
+      "story_events": [
+        {
+          "event": "evt_find_lab_notes",
+          "condition": {
+            "flag_false": "found_lab_notes"
+          }
+        }
+      ]
+    },
+    "rooftop": {
+      "requires_flag": "rooftop_unlocked",
+      "first_visit": "evt_rooftop_first",
+      "story_events": [
+        {
+          "event": "evt_signal_helicopter",
+          "condition": {
+            "flag_true": "knows_evacuation_point",
+            "flag_false": "signaled_helicopter"
+          }
+        },
+        {
+          "event": "evt_helicopter_arrives",
+          "condition": {
+            "flag_true": "signaled_helicopter",
+            "day_gte": 2
+          }
+        }
+      ]
+    }
+  },
+  "events": {
+    "evt_game_start": {
+      "id": "evt_game_start",
+      "title": "วันที่หนึ่ง — ตื่นนอน",
+      "day_trigger": 1,
+      "time_trigger": "08:00",
+      "image_hint": "bedroom_dusty_morning",
+      "description": "[ชื่อ] ตื่นขึ้นมาจากเสียงดังที่ดังมาจากข้างนอก ฝุ่นละอองลอยอยู่ในแสงแดดที่ส่องผ่านม่านเก่า ๆ ไฟฟ้าดับหมดแล้ว เมื่อคืนยังจำได้ว่าได้ยินเสียงกรีดร้องก่อนที่จะหมดสติ วันนี้ต้องหาอาหารและน้ำ",
+      "is_skippable": false,
+      "choices": [
+        {
+          "id": "c1",
+          "text": "มองออกไปนอกหน้าต่างก่อน",
+          "effects": {
+            "time_add_minutes": 5,
+            "fatigue": -3
+          },
+          "narrative": "[ชื่อ] แอบส่องดูนอกหน้าต่าง... ถนนข้างล่างเงียบสงัดผิดปกติ มีรถยนต์พังกระจัดกระจาย และมีร่างนิ่ง ๆ อยู่หลายร่าง ยังไม่รู้ว่าพวกมันตายหรือ... ไม่",
+          "next_event": null,
+          "flags_set": []
+        },
+        {
+          "id": "c2",
+          "text": "ลุกขึ้นตรวจห้องทันที",
+          "effects": {
+            "time_add_minutes": 2,
+            "fatigue": -5
+          },
+          "narrative": "[ชื่อ] ค้นห้องอย่างรวดเร็ว พบน้ำดื่ม 1 ขวดในตู้เย็น (แต่เสียไฟแล้ว) และมีดทำครัว 1 เล่มในลิ้นชัก",
+          "next_event": null,
+          "items_add": [
+            "drink_0145",
+            "wpn_0001"
+          ],
+          "flags_set": []
+        }
+      ]
+    },
+    "evt_condo_hallway_first": {
+      "id": "evt_condo_hallway_first",
+      "title": "ทางเดินในคอนโด",
+      "image_hint": "dark_corridor_bloody",
+      "description": "[ชื่อ] เปิดประตูห้องออกไปอย่างระวัง... ทางเดินมืดสนิท มีกลิ่นเหม็นคาวตุ่น ๆ ลอยมา ไฟฉุกเฉินบางดวงยังสว่างอยู่ด้วยแสงแดงสลัว ๆ ประตูห้องหลายบานเปิดอ้าอยู่",
+      "is_skippable": false,
+      "choices": [
+        {
+          "id": "c1",
+          "text": "เดินอย่างระวังตรวจสอบทีละห้อง",
+          "effects": {
+            "time_add_minutes": 20,
+            "fatigue": -8,
+            "skill_exp": {
+              "scavenge": 5
+            }
+          },
+          "narrative": "ทางเดินเงียบจริง ๆ ห้องส่วนใหญ่ว่างเปล่า แต่ในห้อง 403 พบกระป๋องอาหาร 2 ใบและไฟฉายที่ยังมีแบตอยู่ ขณะเดินกลับได้ยินเสียงเคาะเบา ๆ จากห้อง 406",
+          "items_add": [
+            "food_0071",
+            "food_0071",
+            "tool_0231"
+          ],
+          "flags_set": [
+            "condo_explored"
+          ],
+          "next_event": "evt_room_406_knock"
+        },
+        {
+          "id": "c2",
+          "text": "ตรงดิ่งไปบันไดลงข้างล่างทันที",
+          "effects": {
+            "time_add_minutes": 5,
+            "fatigue": -5
+          },
+          "narrative": "[ชื่อ] เดินเร็วผ่านทางเดิน แต่สะดุดอะไรบางอย่าง... มองลงไปเห็นร่างกายคน เลือดนองพื้น มันไม่นิ่ง",
+          "flags_set": [
+            "condo_explored"
+          ],
+          "next_event": "evt_zombie_in_hallway"
+        }
+      ]
+    },
+    "evt_room_406_knock": {
+      "id": "evt_room_406_knock",
+      "title": "เสียงเคาะจากห้อง 406",
+      "image_hint": "door_with_light_crack",
+      "description": "เสียงเคาะดังขึ้นอีกครั้ง เบาแต่ต่อเนื่อง ตามด้วยเสียงแหบแห้ง 'ใครอยู่ในนั้นไหม... ช่วยด้วย...' เป็นเสียงผู้หญิงสูงอายุ",
+      "choices": [
+        {
+          "id": "c1",
+          "text": "เคาะประตูถามกลับ",
+          "effects": {
+            "time_add_minutes": 10
+          },
+          "narrative": "ผู้หญิงสูงอายุชื่อ 'ป้าสมใจ' ห้อง 406 เปิดประตูออกมาเล็กน้อย เธออ่อนแอมากจากการขาดน้ำ แต่ยังสติดีอยู่ เธอบอกว่าเมื่อ 2 วันก่อนได้ยินเสียงวิทยุบอกว่ามีจุดรับผู้รอดชีวิตอยู่ที่ไหนสักแห่ง และเธอรู้ว่าห้อง 408 มีวิทยุฉุกเฉินเก่า ๆ ของเจ้าของเก่า",
+          "flags_set": [
+            "helped_neighbor"
+          ],
+          "next_event": "evt_neighbor_helped"
+        },
+        {
+          "id": "c2",
+          "text": "เดินหนีเงียบ ๆ ไม่แน่ใจว่าปลอดภัย",
+          "effects": {
+            "time_add_minutes": 2,
+            "bad_choice_streak_add": 1
+          },
+          "narrative": "[ชื่อ] หยุดฟังสักครู่แล้วเดินต่อ... เสียงเคาะค่อย ๆ เงียบลง มันอาจจะถูกต้องก็ได้ที่ไม่ไว้ใจใคร แต่บางอย่างในใจรู้สึกหนักอึ้ง",
+          "flags_set": [
+            "ignored_neighbor"
+          ],
+          "next_event": null
+        }
+      ]
+    },
+    "evt_neighbor_helped": {
+      "id": "evt_neighbor_helped",
+      "title": "ป้าสมใจ — ห้อง 406",
+      "image_hint": "elderly_woman_dim_room",
+      "description": "ป้าสมใจมีท่าทีอ่อนแอแต่สงบ เธอยื่นยาแก้ปวดและผ้าพันแผลให้ และบอกข้อมูลสำคัญ",
+      "choices": [
+        {
+          "id": "c1",
+          "text": "ช่วยป้าสมใจหาอาหารและน้ำ แล้วช่วยล็อคห้องให้เธอ",
+          "requires": {
+            "items_any": [
+              "drink_0145",
+              "food_0071"
+            ]
+          },
+          "effects": {
+            "time_add_minutes": 30,
+            "hunger": -5,
+            "fatigue": -5,
+            "good_choice_streak_add": 1
+          },
+          "items_add": [
+            "med_0175",
+            "med_0187"
+          ],
+          "items_remove_one": [
+            "water_bottle"
+          ],
+          "narrative": "ป้าสมใจดีขึ้นมากหลังกินน้ำ เธอบอกว่าห้อง 408 เจ้าของชื่อวิชัยน่าจะยังมีวิทยุฉุกเฉินที่ซื้อไว้ตั้งแต่สมัยน้ำท่วม ป้าบอกว่า 'ถ้าเจอเขาไม่อยู่ ก็เอาไปใช้ก่อนเถอะ มันจำเป็นกว่า' แล้วป้าก็เผยว่า เมื่อวานเธอได้ยินวิทยุอ้างว่า 'หน่วยกู้ภัยกำลังรวบรวมผู้รอดชีวิตอยู่'",
+          "flags_set": [
+            "helped_neighbor",
+            "knows_radio_location"
+          ],
+          "next_event": null
+        },
+        {
+          "id": "c2",
+          "text": "รับข้อมูลไว้แล้วจะไปหาวิทยุเลย",
+          "effects": {
+            "time_add_minutes": 5,
+            "good_choice_streak_add": 1
+          },
+          "items_add": [
+            "med_0175"
+          ],
+          "narrative": "ป้าสมใจพยักหน้า เธอรู้ดีว่าเวลาสำคัญ แต่รอยยิ้มเล็ก ๆ ของเธอบอกว่าเธอดีใจที่ยังมีคนไม่ทอดทิ้งกัน",
+          "flags_set": [
+            "helped_neighbor",
+            "knows_radio_location"
+          ],
+          "next_event": null
+        }
+      ]
+    },
+    "evt_find_room_408": {
+      "id": "evt_find_room_408",
+      "title": "ห้อง 408 — ค้นหาวิทยุ",
+      "image_hint": "abandoned_room_mess",
+      "description": "ประตูห้อง 408 ปิดแต่ไม่ล็อค ด้านในรกมาก ข้าวของพังทลาย มีร่องรอยการต่อสู้ แต่ไม่มีร่างกาย ริมหน้าต่างมีกล่องพลาสติกสีส้มที่มีสัญลักษณ์ฉุกเฉินอยู่",
+      "choices": [
+        {
+          "id": "c1",
+          "text": "ค้นห้องอย่างละเอียดก่อนเอาวิทยุ",
+          "effects": {
+            "time_add_minutes": 25,
+            "fatigue": -8,
+            "skill_exp": {
+              "scavenge": 8
+            }
+          },
+          "items_add": [
+            "tool_0239",
+            "tool_0249",
+            "food_0071"
+          ],
+          "narrative": "ค้นพบวิทยุฉุกเฉินในกล่องส้ม พร้อมกับเทปกาวดักท์เทปและกระป๋องอาหารอีกใบ แต่วิทยุดูเหมือนแบตหมด ต้องหาแบตหรือชาร์จก่อน",
+          "flags_set": [
+            "found_radio"
+          ],
+          "next_event": null
+        },
+        {
+          "id": "c2",
+          "text": "คว้าวิทยุแล้วออกจากห้องเร็ว ๆ",
+          "effects": {
+            "time_add_minutes": 5,
+            "fatigue": -3
+          },
+          "items_add": [
+            "tool_0239"
+          ],
+          "narrative": "ได้วิทยุมาแต่แบตหมด ต้องหาแบตถ่านมาใส่",
+          "flags_set": [
+            "found_radio"
+          ],
+          "next_event": null
+        }
+      ]
+    },
+    "evt_zombie_in_hallway": {
+      "id": "evt_zombie_in_hallway",
+      "title": "ซอมบี้ในทางเดิน!",
+      "image_hint": "zombie_corridor_attack",
+      "description": "ร่างที่นอนอยู่ยกหัวขึ้น ดวงตาขาวขุ่น ปากแอ่น มันลุกขึ้นอย่างช้า ๆ แต่เริ่มเดินมาหาคุณ เสียงครั้งครั้งดังจากลำคอมัน",
+      "choices": [
+        {
+          "id": "c1",
+          "text": "วิ่งหนีกลับเข้าห้อง",
+          "effects": {
+            "time_add_minutes": 120,
+            "fatigue": -10
+          },
+          "narrative": "[ชื่อ] วิ่งหนีกลับเข้าห้องและล็อคประตู รอให้ซอมบี้เดินออกไปก่อน เสียเวลาไป 2 ชั่วโมง",
+          "flags_set": [],
+          "next_event": null
+        },
+        {
+          "id": "c2",
+          "text": "ใช้มีดทำครัวสู้",
+          "requires": {
+            "items": [
+              "kitchen_knife"
+            ]
+          },
+          "effects_success": {
+            "hp": 0,
+            "time_add_minutes": 10,
+            "skill_exp": {
+              "melee": 8
+            }
+          },
+          "effects_fail": {
+            "hp": -15,
+            "time_add_minutes": 10,
+            "bite_count_add": 1,
+            "skill_exp": {
+              "melee": 3
+            }
+          },
+          "success_chance_base": 0.5,
+          "success_modifier_skill": {
+            "melee": {
+              "per_level": 0.05
+            }
+          },
+          "narrative_success": "จังหวะดี! [ชื่อ] จัดการซอมบี้ได้สำเร็จ ได้รับประสบการณ์การต่อสู้",
+          "narrative_fail": "โดนกัดที่แขน! [ชื่อ] ยังสู้ต่อและจัดการมันได้ แต่แผลที่แขลกำลังเลือดออก",
+          "next_event_fail": "evt_zombie_still_alive_check",
+          "next_event": null
+        },
+        {
+          "id": "c3",
+          "text": "ขว้างของใส่เพื่อดึงความสนใจแล้วเดินอ้อม",
+          "requires": {
+            "items_any": [
+              "food_0071",
+              "drink_0145"
+            ]
+          },
+          "effects": {
+            "time_add_minutes": 8,
+            "skill_exp": {
+              "scavenge": 3
+            }
+          },
+          "items_remove_one_any": [
+            "canned_food",
+            "water_bottle"
+          ],
+          "narrative": "[ชื่อ] ขว้างของใส่ผนังฝั่งตรงข้าม ซอมบี้หันไปตาม เดินอ้อมผ่านไปได้ แต่ต้องเสียของไป 1 ชิ้น",
+          "next_event": null
+        }
+      ]
+    },
+    "evt_zombie_still_alive_check": {
+      "id": "evt_zombie_still_alive_check",
+      "title": "ซอมบี้ยังไม่ตาย!",
+      "image_hint": "zombie_crawling_blood",
+      "description": "มันล้มลงแต่ยังเคลื่อนไหว กำลังคืบคลานมาหาคุณพร้อมปากอ้า เหลือเวลาอีกไม่กี่วินาที",
+      "choices": [
+        {
+          "id": "c1",
+          "text": "ถอยเข้าห้องแล้วล็อคประตู",
+          "effects": {
+            "time_add_minutes": 120
+          },
+          "narrative": "ถอยเข้าห้อง รอเวลา 2 ชั่วโมงเพื่อให้มันเดินออกไป",
+          "next_event": null
+        },
+        {
+          "id": "c2",
+          "text": "สู้ต่อ! กดมันให้หมดแรงด้วยทุกอย่างที่มี",
+          "effects_success": {
+            "hp": 0,
+            "fatigue": -15,
+            "skill_exp": {
+              "melee": 12
+            }
+          },
+          "effects_fail": {
+            "hp": -20,
+            "bite_count_add": 1
+          },
+          "success_chance_base": 0.5,
+          "narrative_success": "สำเร็จ! หมดแรงแต่ซอมบี้ตายแล้ว",
+          "narrative_fail": "โดนกัดอีกครั้ง! อาการบาดเจ็บสาหัสขึ้น",
+          "next_event": null
+        }
+      ]
+    },
+    "evt_store_first_visit": {
+      "id": "evt_store_first_visit",
+      "title": "ร้านสะดวกซื้อ — ชั้น 1",
+      "image_hint": "dark_convenience_store",
+      "description": "[ชื่อ] เดินลงมาชั้น 1 ร้านสะดวกซื้อประตูกระจกแตก ของบนชั้นวางถูกปล้นไปเกือบหมดแล้ว แต่ยังอาจมีของเหลืออยู่ในสต็อก",
+      "choices": [
+        {
+          "id": "c1",
+          "text": "ค้นหาสต็อกหลังร้านอย่างละเอียด",
+          "effects": {
+            "time_add_minutes": 40,
+            "fatigue": -12,
+            "skill_exp": {
+              "scavenge": 10
+            }
+          },
+          "items_add": [
+            "food_0071",
+            "food_0071",
+            "drink_0145",
+            "tool_0243",
+            "med_0175"
+          ],
+          "narrative": "ใช้เวลานานแต่คุ้มค่า พบของในกล่องที่ถูกซ่อนไว้หลังชั้นวางพัง แบตถ่าน AA 4 ก้อน! เหมาะกับวิทยุฉุกเฉินพอดี",
+          "flags_set": [
+            "store_looted"
+          ],
+          "next_event": "evt_store_survivor_encounter"
+        },
+        {
+          "id": "c2",
+          "text": "กวาดของบนชั้นที่เหลือแล้วออกไปเร็ว",
+          "effects": {
+            "time_add_minutes": 10,
+            "fatigue": -5
+          },
+          "items_add": [
+            "drink_0145",
+            "food_0065"
+          ],
+          "narrative": "ได้ของนิดหน่อยแต่ทำได้เร็ว ยังเหลือเวลามากกว่า",
+          "flags_set": [
+            "store_looted"
+          ],
+          "next_event": null
+        }
+      ]
+    },
+    "evt_store_survivor_encounter": {
+      "id": "evt_store_survivor_encounter",
+      "title": "คนรอดชีวิต — ร้านสะดวกซื้อ",
+      "image_hint": "hooded_survivor_store",
+      "description": "มีเสียงกรอบแกรบมาจากห้องน้ำหลังร้าน ประตูเปิดออก พบชายหนุ่มร่างผอมยืนอยู่ มือถืออาวุธเป็นไม้เบสบอล แต่ดูกลัวมากกว่าอันตราย เขาตะโกน 'หยุด! อย่าเข้ามาอีก!'",
+      "choices": [
+        {
+          "id": "c1",
+          "text": "ยกมือขึ้น พูดว่าเราไม่ได้เป็นศัตรูกัน",
+          "effects": {
+            "time_add_minutes": 20,
+            "good_choice_streak_add": 1
+          },
+          "narrative": "หลังคุยกันสักพัก เขาเริ่มผ่อนคลาย ชื่อ 'ต้น' อายุ 24 เขาบอกว่าเมื่อวานได้ยินวิทยุทหารพูดถึงจุดรวมพลที่สวนสาธารณะใกล้ ๆ แต่ไม่แน่ใจว่าจะยังมีอยู่ไหม เขาเสนอแลกอาหารกับข้อมูลนี้",
+          "flags_set": [
+            "talked_to_friendly_survivor",
+            "knows_evacuation_point"
+          ],
+          "next_event": "evt_survivor_trade_offer"
+        },
+        {
+          "id": "c2",
+          "text": "ไม่มีเวลา เดินออกจากร้านทันที",
+          "effects": {
+            "time_add_minutes": 2
+          },
+          "narrative": "[ชื่อ] ถอยออกมาโดยไม่พูดอะไร บางทีการไม่ยุ่งเกี่ยวก็ปลอดภัยกว่า แต่โอกาสที่จะได้ข้อมูลก็หายไปด้วย",
+          "flags_set": [],
+          "next_event": null
+        },
+        {
+          "id": "c3",
+          "text": "ขณะที่เขาฟุ้งซ่าน รีบคว้าของแล้ววิ่ง",
+          "effects": {
+            "time_add_minutes": 5,
+            "bad_choice_streak_add": 1
+          },
+          "items_add": [
+            "food_0071",
+            "drink_0145"
+          ],
+          "narrative": "ได้ของมาแต่ทำลายโอกาสขอความช่วยเหลือ ต้นตะโกนด่าและประกาศว่าจะไม่ช่วยใครอีกแล้ว",
+          "flags_set": [
+            "robbed_survivor"
+          ],
+          "next_event": null
+        }
+      ]
+    },
+    "evt_survivor_trade_offer": {
+      "id": "evt_survivor_trade_offer",
+      "title": "ต้น — เสนอแลกเปลี่ยน",
+      "image_hint": "two_survivors_talking",
+      "description": "ต้นบอกว่าเขาได้ยินสัญญาณวิทยุทหารพูดถึงจุดรวมพลที่ 'สวนหลวง ร.9' แต่ต้องการอาหารมากกว่านี้ก่อนจะบอกรายละเอียด",
+      "choices": [
+        {
+          "id": "c1",
+          "text": "แลกกระป๋องอาหาร 2 ใบกับข้อมูล",
+          "requires": {
+            "items_count": {
+              "canned_food": 2
+            }
+          },
+          "effects": {
+            "time_add_minutes": 10,
+            "good_choice_streak_add": 1
+          },
+          "items_remove": [
+            "food_0071",
+            "food_0071"
+          ],
+          "narrative": "ต้นเล่าว่าวิทยุพูดถึงเวลา 'เช้าวันที่สาม' เป็นครั้งสุดท้ายที่จะรับผู้รอดชีวิต เขายังบอกว่าถ้าต้องการส่งสัญญาณ ให้ขึ้นไปที่ที่สูง ๆ แล้วส่องไฟฉายในรหัส 3 ครั้ง-หยุด-3 ครั้ง",
+          "flags_set": [
+            "knows_evacuation_point",
+            "knows_signal_code"
+          ],
+          "next_event": null
+        },
+        {
+          "id": "c2",
+          "text": "ปฏิเสธ ไม่อยากแบ่งของ แต่ขอบคุณที่บอก",
+          "effects": {
+            "time_add_minutes": 5
+          },
+          "narrative": "ต้นพยักหน้าเข้าใจ เขาบอกคร่าว ๆ ว่า 'สวนสาธารณะแถวนี้' ก่อนที่ทั้งคู่จะแยกทาง",
+          "flags_set": [
+            "knows_evacuation_point"
+          ],
+          "next_event": null
+        }
+      ]
+    },
+    "evt_repair_radio": {
+      "id": "evt_repair_radio",
+      "title": "ซ่อมวิทยุฉุกเฉิน",
+      "trigger_condition": {
+        "flag_true": "found_radio",
+        "items": [
+          "battery_aa"
+        ]
+      },
+      "image_hint": "emergency_radio_table",
+      "description": "[ชื่อ] วางวิทยุลงบนโต๊ะ ใส่แบตถ่านที่หามาได้ กดปุ่ม ON แล้วรอ... หน้าจอเล็ก ๆ ค่อย ๆ สว่างขึ้น",
+      "choices": [
+        {
+          "id": "c1",
+          "text": "สแกนคลื่นวิทยุทุกความถี่",
+          "effects": {
+            "time_add_minutes": 15
+          },
+          "narrative": "หลังสแกนอยู่นาน ได้ยินเสียงแว่ว ๆ ที่ความถี่ 156.800 MHz — เสียงผู้ชายพูดเป็นระยะ ๆ ว่า '...จุดรวมพล...สวนหลวง...เช้าวันที่สาม...สัญญาณแสง 3-3...' สัญญาณอ่อนมากแต่ชัดเจน",
+          "flags_set": [
+            "repaired_radio",
+            "knows_evacuation_point",
+            "knows_signal_code"
+          ],
+          "next_event": "evt_radio_message_detail"
+        }
+      ]
+    },
+    "evt_radio_message_detail": {
+      "id": "evt_radio_message_detail",
+      "title": "สัญญาณวิทยุ — ข้อความสำคัญ",
+      "image_hint": "radio_glowing_dark_room",
+      "description": "หลังฟังซ้ำหลายรอบ [ชื่อ] จดข้อความไว้ได้ว่า 'หน่วยกู้ภัยระหว่างประเทศจะมาถึงพื้นที่ในเช้าวันที่สาม ผู้รอดชีวิตต้องการส่งสัญญาณแสง 3 ครั้ง หยุด 3 ครั้ง จากที่สูง เพื่อยืนยันตำแหน่ง จุดรวมพลสุดท้ายจะเป็น สวนหลวง ร.9'",
+      "is_narrative_only": true,
+      "auto_proceed": true,
+      "effects": {
+        "good_choice_streak_add": 1
+      },
+      "flags_set": [
+        "knows_evacuation_point",
+        "knows_signal_code",
+        "repaired_radio"
+      ],
+      "narrative": "นี่คือโอกาสเดียวที่จะออกจากที่นี่ได้! ต้องขึ้นไปบนที่สูงและส่งสัญญาณก่อนรุ่งเช้าวันที่สาม",
+      "next_event": null
+    },
+    "evt_station_entrance": {
+      "id": "evt_station_entrance",
+      "title": "สถานีตำรวจ",
+      "image_hint": "police_station_abandoned",
+      "description": "ประตูสถานีตำรวจพังทลาย มีรถตำรวจคว่ำอยู่หน้าทาง กระจกแตก กลิ่นเลือดแรง ด้านในมืด แต่มีไฟฉายของใครสักคนส่องกระพริบอยู่",
+      "choices": [
+        {
+          "id": "c1",
+          "text": "เข้าทางประตูหน้าตรง ๆ",
+          "effects": {
+            "time_add_minutes": 10
+          },
+          "narrative": "เข้าไปได้แต่ทำเสียงดังจากเศษกระจก...",
+          "next_event": "evt_hostile_survivor_encounter"
+        },
+        {
+          "id": "c2",
+          "text": "วนหาทางเข้าด้านหลัง",
+          "effects": {
+            "time_add_minutes": 20,
+            "skill_exp": {
+              "scavenge": 5
+            }
+          },
+          "narrative": "พบทางเข้าด้านหลังผ่านช่องระบายอากาศ เข้าไปได้อย่างเงียบ",
+          "flags_set": [
+            "station_explored"
+          ],
+          "next_event": "evt_station_armory_direct"
+        }
+      ]
+    },
+    "evt_hostile_survivor_encounter": {
+      "id": "evt_hostile_survivor_encounter",
+      "title": "ผู้รอดชีวิตขี้ระแวง",
+      "image_hint": "survivor_gun_pointing",
+      "description": "ไฟฉายส่องตรงมาที่หน้า ชายร่างใหญ่ชื่อ 'สมชาย' ยืนถือปืนสั้น ดวงตาอ่อนล้าแต่เต็มไปด้วยความกลัว 'มึงเป็นใคร! อยู่ในพวกกลุ่มนั้นรึเปล่า?'",
+      "choices": [
+        {
+          "id": "c1",
+          "text": "ยกมือขึ้น พูดช้า ๆ ว่าไม่ได้เป็นศัตรู",
+          "effects": {
+            "time_add_minutes": 30,
+            "good_choice_streak_add": 1
+          },
+          "narrative": "ใช้เวลานานกว่าจะสร้างความเชื่อใจกัน สมชายเป็นตำรวจเก่า เขารู้เรื่องการอพยพและยังมีกุญแจคลังอาวุธ เขาเสนอแลกกุญแจกับอาหาร",
+          "flags_set": [
+            "hostile_survivor_befriended"
+          ],
+          "next_event": "evt_station_negotiate_success"
+        },
+        {
+          "id": "c2",
+          "text": "พูดว่า 'รู้เรื่องเฮลิคอปเตอร์ไหม' แล้วรอดูท่าที",
+          "requires": {
+            "flags_any": [
+              "knows_evacuation_point",
+              "repaired_radio"
+            ]
+          },
+          "effects": {
+            "time_add_minutes": 20,
+            "good_choice_streak_add": 1
+          },
+          "narrative": "สมชายตาโต เขารู้จักรหัสสัญญาณนั้น! เขาพูดซ้ำทำนองว่า 'ยังมีโอกาสอยู่...' และเริ่มคุยด้วยดีขึ้น",
+          "flags_set": [
+            "hostile_survivor_befriended"
+          ],
+          "next_event": "evt_station_negotiate_success"
+        },
+        {
+          "id": "c3",
+          "text": "ฉวยโอกาสขณะที่เขาไม่ระวัง วิ่งหนีออกไป",
+          "effects": {
+            "time_add_minutes": 10,
+            "hp": -5,
+            "bad_choice_streak_add": 1
+          },
+          "narrative": "สมชายยิงปืนขึ้นเพดานเตือน กระสุนปริ้งมาโดนไหล่นิดหน่อย วิ่งออกมาได้แต่บาดเจ็บ",
+          "flags_set": [
+            "escaped_hostile_group",
+            "witnessed_violence"
+          ],
+          "next_event": null
+        }
+      ]
+    },
+    "evt_station_negotiate_success": {
+      "id": "evt_station_negotiate_success",
+      "title": "สมชาย — ตกลงกัน",
+      "image_hint": "two_men_handshake_dark",
+      "description": "สมชายนั่งลงพักแรงบนเก้าอี้ตำรวจ หัวไหล่ห่อ เขาเล่าว่ากลุ่มคนร้ายได้ทำร้ายพวกตำรวจที่เหลืออยู่ไป และตอนนี้เขาอยู่คนเดียว",
+      "choices": [
+        {
+          "id": "c1",
+          "text": "ชวนสมชายไปด้วยกันเมื่อถึงวันอพยพ",
+          "effects": {
+            "time_add_minutes": 15,
+            "good_choice_streak_add": 1
+          },
+          "items_add": [
+            "wpn_0034",
+            "med_0203"
+          ],
+          "narrative": "สมชายพยักหน้าและมอบกระบองตำรวจกับชุดปฐมพยาบาลให้ เขายังบอกว่ามีรถตำรวจที่ยังพอขับได้อยู่หลังสถานี",
+          "flags_set": [
+            "station_explored",
+            "has_ally_somchai"
+          ],
+          "next_event": null
+        },
+        {
+          "id": "c2",
+          "text": "แค่ขอของแล้วแยกทาง",
+          "effects": {
+            "time_add_minutes": 5
+          },
+          "items_add": [
+            "med_0203"
+          ],
+          "narrative": "สมชายให้ชุดปฐมพยาบาลมาก่อนแยกทาง เขาดูไม่ผิดหวัง บางทีทุกคนก็ต้องเดินทางคนเดียว",
+          "flags_set": [
+            "station_explored"
+          ],
+          "next_event": null
+        }
+      ]
+    },
+    "evt_station_armory_direct": {
+      "id": "evt_station_armory_direct",
+      "title": "คลังอาวุธสถานีตำรวจ",
+      "image_hint": "police_armory_dark",
+      "description": "ห้องเล็ก ๆ ที่ล็อคไว้ด้วยประตูเหล็ก กุญแจยังเสียบอยู่! คนที่อยู่คนสุดท้ายคงไม่ทันล็อค ด้านในมีอุปกรณ์หลายอย่าง",
+      "choices": [
+        {
+          "id": "c1",
+          "text": "เลือกของที่จำเป็นที่สุด (น้ำหนักจำกัด)",
+          "effects": {
+            "time_add_minutes": 20,
+            "skill_exp": {
+              "scavenge": 8
+            }
+          },
+          "items_add": [
+            "wpn_0034",
+            "tool_0232",
+            "med_0203",
+            "tool_0237"
+          ],
+          "narrative": "พบกระบองตำรวจ ไฟฉายแรงสูง ชุดปฐมพยาบาลสมบูรณ์ และพลุสัญญาณ! พลุนี้จะช่วยให้ส่งสัญญาณได้ไกลกว่าไฟฉายมาก",
+          "flags_set": [
+            "station_explored"
+          ],
+          "next_event": null
+        }
+      ]
+    },
+    "evt_clinic_entrance": {
+      "id": "evt_clinic_entrance",
+      "title": "คลินิกใกล้เคียง",
+      "image_hint": "clinic_overturned_chaos",
+      "description": "คลินิกเล็ก ๆ หน้าคอนโด ประตูกระจกแตก ม่านสีขาวเปื้อนเลือด แต่ยังมีของที่มีประโยชน์อยู่ในนั้นแน่ ๆ",
+      "choices": [
+        {
+          "id": "c1",
+          "text": "ค้นหายาและอุปกรณ์การแพทย์",
+          "effects": {
+            "time_add_minutes": 30,
+            "fatigue": -10,
+            "skill_exp": {
+              "scavenge": 8
+            }
+          },
+          "items_add": [
+            "med_0175",
+            "med_0175",
+            "med_0184",
+            "med_0200"
+          ],
+          "narrative": "พบยาและอุปกรณ์ได้พอสมควร แต่ระหว่างค้นหาพบกล่องเอกสารที่มีตราสัญลักษณ์แปลก ๆ ที่มุมห้อง ตราของมหาวิทยาลัยและหน่วยงานวิจัย",
+          "flags_set": [
+            "clinic_explored"
+          ],
+          "next_event": "evt_find_lab_notes"
+        },
+        {
+          "id": "c2",
+          "text": "หยิบของที่เห็นเด่นชัดแล้วออกไป",
+          "effects": {
+            "time_add_minutes": 10
+          },
+          "items_add": [
+            "med_0175",
+            "med_0184"
+          ],
+          "narrative": "ได้ของมาแต่ค้นไม่ทั่ว มีบางอย่างที่อาจพลาดไป",
+          "flags_set": [
+            "clinic_explored"
+          ],
+          "next_event": null
+        }
+      ]
+    },
+    "evt_find_lab_notes": {
+      "id": "evt_find_lab_notes",
+      "title": "บันทึกนักวิจัย — เบาะแสสำคัญ",
+      "image_hint": "research_notes_documents",
+      "description": "กล่องเอกสารมีบันทึกของ 'ดร.วีรพล' นักวิจัยไวรัสวิทยาที่เคยทำงานในอาคารใกล้เคียง บันทึกระบุว่าเขากำลังพัฒนาวัคซีนต้นแบบในแล็บชั้น B2 ของอาคารด้านหลัง และ 'ถ้าใครพบบันทึกนี้ โปรดนำข้อมูลในซองสีแดงส่งให้หน่วยกู้ภัยด้วย มันสำคัญมาก'",
+      "choices": [
+        {
+          "id": "c1",
+          "text": "เก็บบันทึกและซองสีแดงไว้ทั้งหมด",
+          "effects": {
+            "time_add_minutes": 5,
+            "good_choice_streak_add": 1
+          },
+          "items_add": [
+            "story_lab_notes"
+          ],
+          "narrative": "ซองสีแดงหนักพอสมควร ด้านในมีอุปกรณ์จัดเก็บข้อมูลและสูตรเคมีในกระดาษ ไม่รู้ว่ามีค่าแค่ไหน แต่ดร.วีรพลรู้สึกว่ามันสำคัญพอที่จะทิ้งบันทึกไว้",
+          "flags_set": [
+            "found_lab_notes"
+          ],
+          "next_event": null
+        },
+        {
+          "id": "c2",
+          "text": "อ่านผ่าน ๆ แล้วทิ้งไว้ มันหนักเกินไป",
+          "effects": {
+            "time_add_minutes": 2
+          },
+          "narrative": "บันทึกถูกทิ้งไว้ บางทีมันก็สายเกินไปแล้วสำหรับวัคซีน... หรือเปล่า?",
+          "flags_set": [],
+          "next_event": null
+        }
+      ]
+    },
+    "evt_night_event_day1": {
+      "id": "evt_night_event_day1",
+      "title": "กลางคืน — วันที่ 1",
+      "time_trigger": "22:00",
+      "day_trigger": 1,
+      "image_hint": "condo_night_window_sounds",
+      "description": "เสียงกรีดร้องดังมาจากถนนข้างล่าง ตามด้วยเสียงปืน 3 นัด แล้วก็เงียบ [ชื่อ] ยืนอยู่ในความมืด ความหิวเริ่มรู้สึกชัดขึ้น",
+      "choices": [
+        {
+          "id": "c1",
+          "text": "แอบส่องดูออกหน้าต่าง",
+          "effects": {
+            "time_add_minutes": 5,
+            "fatigue": -3
+          },
+          "narrative": "เห็นแสงไฟฉาย 3-4 ดวงเคลื่อนที่อยู่ด้านล่าง เป็นกลุ่มคนที่พกอาวุธ ไม่ใช่ซอมบี้ พวกเขากำลังปล้นร้านค้าที่เหลือ",
+          "flags_set": [
+            "witnessed_violence"
+          ],
+          "next_event": null
+        },
+        {
+          "id": "c2",
+          "text": "ปิดม่าน นอนพักผ่อน ไม่ต้องรู้ดีกว่า",
+          "effects": {
+            "time_add_minutes": 5
+          },
+          "narrative": "[ชื่อ] หลับตาลง ความเงียบของคืนนั้นหนักกว่าเสียงใด ๆ",
+          "next_event": null
+        }
+      ]
+    },
+    "evt_hostile_group_condo": {
+      "id": "evt_hostile_group_condo",
+      "title": "กลุ่มคนร้ายบุกคอนโด",
+      "day_trigger": 2,
+      "time_trigger": "02:00",
+      "probability": 0.6,
+      "image_hint": "door_banging_night",
+      "description": "เสียงตีประตูดังสนั่น 'เปิดประตูออกมา! เรารู้ว่ามีคนอยู่ข้างใน!' เสียงดังหลายคน น่าจะเป็นกลุ่มที่เห็นเมื่อคืน",
+      "choices": [
+        {
+          "id": "c1",
+          "text": "บาริเคดประตูเพิ่มเติมและซ่อนตัว",
+          "requires": {
+            "items_any": [
+              "tool_0249",
+              "story_heavy_furniture"
+            ]
+          },
+          "effects": {
+            "time_add_minutes": 180,
+            "fatigue": -15,
+            "good_choice_streak_add": 1
+          },
+          "narrative": "ใช้เวลาทั้งคืนซ่อนอยู่อย่างหวาดระแวง แต่พวกเขาก็ยอมแพ้และออกไป",
+          "flags_set": [
+            "barricaded_door"
+          ],
+          "next_event": null
+        },
+        {
+          "id": "c2",
+          "text": "เงียบ อย่าขยับ รอให้พวกเขาเดินต่อ",
+          "effects": {
+            "time_add_minutes": 120
+          },
+          "success_chance_base": 0.7,
+          "narrative_success": "หลังจากเงียบอยู่นาน เสียงก็ห่างออกไป พวกเขาคงคิดว่าไม่มีใครอยู่",
+          "narrative_fail": "ประตูถูกถีบจนพัง! พวกเขาบุกเข้ามา",
+          "next_event_fail": "evt_hostile_group_confront",
+          "next_event": null
+        },
+        {
+          "id": "c3",
+          "text": "เปิดประตูออกไปเผชิญหน้า",
+          "effects": {
+            "bad_choice_streak_add": 2,
+            "hp": -25
+          },
+          "narrative": "ตัดสินใจผิดพลาดอย่างร้ายแรง ถูกทุบตีก่อนที่จะหนีออกมาได้ได้รับบาดเจ็บหนัก",
+          "next_event": null
+        }
+      ]
+    },
+    "evt_hostile_group_confront": {
+      "id": "evt_hostile_group_confront",
+      "title": "เผชิญหน้ากับกลุ่มคนร้าย",
+      "image_hint": "group_attackers_condo",
+      "description": "ชาย 3 คนบุกเข้ามา อาวุธหนัก ดวงตาอันตราย 'เอาของมาทั้งหมด ไม่งั้นตาย!'",
+      "choices": [
+        {
+          "id": "c1",
+          "text": "ยกมือขึ้น ยอมมอบของบางส่วน",
+          "effects": {
+            "hp": -5,
+            "bad_choice_streak_add": 1
+          },
+          "items_remove_random": 3,
+          "narrative": "เสียของไปแต่ยังมีชีวิตอยู่ พวกเขาออกไปหลังได้ของ",
+          "next_event": null
+        },
+        {
+          "id": "c2",
+          "text": "สู้! ใช้ทุกอาวุธที่มี",
+          "effects_success": {
+            "hp": -20,
+            "fatigue": -20,
+            "skill_exp": {
+              "melee": 15
+            }
+          },
+          "effects_fail": {
+            "hp": -45,
+            "bad_choice_streak_add": 2
+          },
+          "success_chance_base": 0.35,
+          "success_modifier_skill": {
+            "melee": {
+              "per_level": 0.08
+            }
+          },
+          "narrative_success": "ชนะได้ด้วยราคาสูง บาดเจ็บหนักแต่พวกเขาหนีไป",
+          "narrative_fail": "โดนสู้กลับอย่างหนัก HP ลดต่ำมาก",
+          "next_event": null
+        },
+        {
+          "id": "c3",
+          "text": "กระโดดออกหน้าต่างฉุกเฉิน",
+          "requires": {
+            "floor": "low"
+          },
+          "effects": {
+            "hp": -10,
+            "fatigue": -15
+          },
+          "narrative": "[ชื่อ] กระโดดออกหน้าต่างลงมา บาดเจ็บจากการตก แต่รอดชีวิต พวกคนร้ายตะโกนด่าอยู่บนนั้น",
+          "flags_set": [
+            "escaped_hostile_group"
+          ],
+          "next_event": null
+        }
+      ]
+    },
+    "evt_rooftop_first": {
+      "id": "evt_rooftop_first",
+      "title": "ดาดฟ้าคอนโด",
+      "requires_flag": "rooftop_unlocked",
+      "image_hint": "rooftop_city_ruins_sunset",
+      "description": "[ชื่อ] ขึ้นมาบนดาดฟ้า วิวกว้างออกไปเห็นเมืองที่ถูกทำลาย ควันดำลอยขึ้นหลายจุด ด้านล่างมีซอมบี้เดินเพ่นพ่านอยู่เต็มถนน แต่ตอนนี้บนนี้ปลอดภัย... และมองเห็นได้ไกล",
+      "is_narrative_only": true,
+      "effects": {
+        "time_add_minutes": 10
+      },
+      "auto_proceed_to_event": "evt_signal_helicopter"
+    },
+    "evt_signal_helicopter": {
+      "id": "evt_signal_helicopter",
+      "title": "ส่งสัญญาณเฮลิคอปเตอร์",
+      "requires_flags": [
+        "knows_evacuation_point",
+        "rooftop_unlocked"
+      ],
+      "image_hint": "rooftop_flashlight_signal_night",
+      "description": "ท้องฟ้ากลางคืนของวันที่ 2 ไม่มีเมฆ [ชื่อ] ยืนบนดาดฟ้า มือถือไฟฉายหรือพลุสัญญาณ ส่งสัญญาณตามรหัสที่รู้มา 3 ครั้ง - หยุด - 3 ครั้ง แล้วก็รอ...",
+      "choices": [
+        {
+          "id": "c1",
+          "text": "ส่งสัญญาณด้วยไฟฉาย (มีโอกาส 60% ว่าจะถูกมองเห็น)",
+          "requires": {
+            "items": [
+              "flashlight"
+            ]
+          },
+          "effects": {
+            "time_add_minutes": 30
+          },
+          "success_chance": 0.6,
+          "narrative_success": "สักพักได้ยินเสียงเครื่องบิน ไฟสัญญาณตอบกลับมาจากระยะไกล! พวกเขารับสัญญาณแล้ว",
+          "narrative_fail": "ส่งสัญญาณอยู่นานแต่ไม่มีการตอบรับ อาจต้องลองอีกครั้งพรุ่งนี้ หรือหาของที่ส่งสัญญาณได้ไกลกว่านี้",
+          "flags_set_success": [
+            "signaled_helicopter"
+          ],
+          "next_event": null
+        },
+        {
+          "id": "c2",
+          "text": "ส่งสัญญาณด้วยพลุ (โอกาส 95%)",
+          "requires": {
+            "items": [
+              "flare"
+            ]
+          },
+          "effects": {
+            "time_add_minutes": 15
+          },
+          "items_remove": [
+            "tool_0237"
+          ],
+          "success_chance": 0.95,
+          "narrative_success": "พลุสีแดงพุ่งขึ้นท้องฟ้า สว่างทั้งบริเวณ ไม่นานก็ได้ยินเสียงใบพัดตอบรับมา! สัญญาณส่งถึงแล้ว",
+          "narrative_fail": "พลุติดแต่ลมแรงเกินไป แสงดับก่อนใครจะเห็น ต้องหาพลุอีกอันหรือส่งด้วยวิธีอื่น",
+          "flags_set_success": [
+            "signaled_helicopter"
+          ],
+          "next_event": null
+        },
+        {
+          "id": "c3",
+          "text": "ใช้ไฟฉายยุทธวิธี (โอกาส 80%)",
+          "requires": {
+            "items": [
+              "flashlight_tactical"
+            ]
+          },
+          "effects": {
+            "time_add_minutes": 20
+          },
+          "success_chance": 0.8,
+          "narrative_success": "ไฟฉายแรงสูงส่งแสงไปไกลมาก ได้รับสัญญาณตอบกลับอย่างชัดเจน!",
+          "narrative_fail": "แบตไฟฉายใกล้หมด สัญญาณอ่อนเกินไป",
+          "flags_set_success": [
+            "signaled_helicopter"
+          ],
+          "next_event": null
+        }
+      ]
+    },
+    "evt_day3_morning": {
+      "id": "evt_day3_morning",
+      "title": "รุ่งเช้าวันที่ 3",
+      "day_trigger": 3,
+      "time_trigger": "06:00",
+      "image_hint": "sunrise_ruined_city",
+      "description": "แสงรุ่งอรุณแทรกผ่านม่านที่กรอบ [ชื่อ] ตื่นขึ้นมาโดยไม่ได้นอนหลับมากนัก วันนี้คือวันสุดท้ายที่เฮลิคอปเตอร์จะมา...",
+      "is_narrative_only": true,
+      "condition_branch": [
+        {
+          "condition": {
+            "flag_true": "signaled_helicopter"
+          },
+          "next_event": "evt_helicopter_arrives",
+          "narrative": "และ... ได้ยินเสียงใบพัดหรือเปล่า? เสียงนั้นดังขึ้นเรื่อย ๆ"
+        },
+        {
+          "condition": {
+            "flag_false": "signaled_helicopter",
+            "flag_true": "knows_evacuation_point"
+          },
+          "next_event": "evt_rush_to_evacuation",
+          "narrative": "ไม่ได้ส่งสัญญาณ แต่ยังรู้ว่าจุดนัดพบอยู่ที่ไหน ต้องรีบไปก่อนสายเกินไป"
+        },
+        {
+          "condition": {
+            "flag_false": "signaled_helicopter",
+            "flag_false_2": "knows_evacuation_point"
+          },
+          "next_event": "evt_missed_rescue",
+          "narrative": "ไม่รู้เรื่องเฮลิคอปเตอร์เลย วันนี้เป็นอีกวันที่ต้องเอาตัวรอดต่อไป..."
+        }
+      ]
+    },
+    "evt_helicopter_arrives": {
+      "id": "evt_helicopter_arrives",
+      "title": "เฮลิคอปเตอร์มาถึง",
+      "requires_flag": "signaled_helicopter",
+      "image_hint": "helicopter_rescue_rooftop",
+      "description": "เสียงดังสนั่น ลมแรงพัดกระหน่ำ เฮลิคอปเตอร์ทหารสีขาวมีตราสัญลักษณ์ขององค์กรกู้ภัยนานาชาติ เริ่มโคจรเหนือดาดฟ้า มีเชือกหย่อนลงมาพร้อมเจ้าหน้าที่ 2 คน พวกเขาตะโกนว่า 'ขึ้นมาได้เลย! เหลือเวลาอีก 10 นาที เราต้องออกก่อนฝูงซอมบี้มาถึง!'",
+      "choices": [
+        {
+          "id": "c1",
+          "text": "ขึ้นเฮลิคอปเตอร์ไปกับพวกเขาทันที",
+          "effects": {
+            "time_add_minutes": 10
+          },
+          "narrative": "ก้าวแรกบนพื้นสะอาด กลิ่นอากาศแตกต่างออกไปเมื่อเฮลิคอปเตอร์ขึ้นสูง เมืองที่เคยเป็นบ้านค่อย ๆ เล็กลงจนหายไปในหมอก",
+          "next_event": "evt_final_choice",
+          "flags_set": []
+        },
+        {
+          "id": "c2",
+          "text": "อยู่ต่อ... ที่นี่ยังต้องการคน",
+          "effects": {
+            "time_add_minutes": 5
+          },
+          "narrative": "เจ้าหน้าที่แลกสายตากัน แล้วหย่อนเสบียงสำรองลงมาให้ก่อนบินจากไป 'ขอให้โชคดี...' เสียงเครื่องค่อย ๆ เงียบลงในท้องฟ้าเช้า",
+          "next_event": "evt_ending_new_world",
+          "flags_set": []
+        }
+      ]
+    },
+    "evt_rush_to_evacuation": {
+      "id": "evt_rush_to_evacuation",
+      "title": "วิ่งไปจุดนัดพบ!",
+      "image_hint": "running_street_zombie",
+      "description": "[ชื่อ] วิ่งออกจากคอนโดไปตามถนน ซอมบี้กระจัดกระจายอยู่ทั่ว แต่ระยะทางไปสวนหลวงไม่ไกล ต้องรีบ!",
+      "choices": [
+        {
+          "id": "c1",
+          "text": "วิ่งตรงรัว ๆ หลบทุกอย่างที่ขวางทาง",
+          "effects": {
+            "time_add_minutes": 20,
+            "hp": -10,
+            "fatigue": -25
+          },
+          "success_chance_base": 0.7,
+          "narrative_success": "ถึงสวนหลวงพอดีกับเสียงใบพัดที่ดังขึ้น มีเวลาเหลือนิดเดียว",
+          "narrative_fail": "โดนซอมบี้ปล้ำระหว่างทาง ช้าออกไปนาน",
+          "effects_fail": {
+            "bite_count_add": 1,
+            "time_add_minutes": 30
+          },
+          "next_event_success": "evt_final_choice",
+          "next_event_fail": "evt_final_choice"
+        },
+        {
+          "id": "c2",
+          "text": "ใช้เส้นทางหลบหลัง แม้จะไกลกว่า",
+          "effects": {
+            "time_add_minutes": 40,
+            "hp": -3
+          },
+          "narrative": "ถึงสวนหลวง เฮลิคอปเตอร์ยังอยู่ รอดมาได้!",
+          "next_event": "evt_final_choice"
+        }
+      ]
+    },
+    "evt_final_choice": {
+      "id": "evt_final_choice",
+      "title": "ทางแยกสุดท้าย",
+      "image_hint": "helicopter_door_choice",
+      "description": "เจ้าหน้าที่ยื่นมือมาช่วย 'ขึ้นมาเลย! พวกเราจะพาคุณไปที่หลบภัยที่ปลอดภัย มีอาหาร น้ำ และผู้คนอีกกว่าสองพัน รอพวกเรารอดชีวิตอยู่ที่นั่น!'",
+      "choices": [
+        {
+          "id": "c1",
+          "text": "ไปกับพวกเขา — ออกจากฝันร้ายนี้",
+          "effects": {
+            "time_add_minutes": 5
+          },
+          "narrative": "ก้าวขึ้นบันไดสู่เฮลิคอปเตอร์ ลมจากใบพัดพัดแรง เมืองค่อย ๆ หดเล็กลงใต้เท้า [ชื่อ] มองลงไปครั้งสุดท้าย",
+          "next_event": "evt_ending_escape_or_hope",
+          "flags_set": []
+        },
+        {
+          "id": "c2",
+          "text": "ส่ายหัว — 'ฉันจะอยู่ที่นี่ต่อไป'",
+          "effects": {
+            "time_add_minutes": 5
+          },
+          "narrative": "เจ้าหน้าที่ตาโต แต่พยักหน้าเคารพการตัดสินใจ พวกเขาทิ้งเสบียงไว้หนึ่งกล่องก่อนบินจากไป เสียงใบพัดค่อย ๆ เงียบลงในท้องฟ้า — [ชื่อ] อยู่คนเดียวอีกครั้ง แต่ครั้งนี้มันรู้สึกต่างออกไป",
+          "next_event": "evt_ending_new_world",
+          "flags_set": []
+        }
+      ]
+    },
+    "evt_ending_escape_or_hope": {
+      "id": "evt_ending_escape_or_hope",
+      "title": "บนเฮลิคอปเตอร์",
+      "image_hint": "helicopter_interior_survivors",
+      "description": "บนเฮลิคอปเตอร์มีผู้รอดชีวิตอีกหลายคน ตาล้าแต่เปี่ยมด้วยความหวัง เจ้าหน้าที่มองที่กระเป๋าของ [ชื่อ] แล้วถาม 'คุณเอาอะไรมาบ้าง?'",
+      "condition_branch": [
+        {
+          "condition": {
+            "flag_true": "found_lab_notes"
+          },
+          "next_event": "evt_ending_hope",
+          "narrative": "เมื่อ [ชื่อ] หยิบซองสีแดงออกมา เจ้าหน้าที่สะดุ้ง ตาเบิก 'นี่มัน... บันทึกของดร.วีรพล! ทีมวิจัยตามหาสิ่งนี้มาหลายสัปดาห์แล้ว!'"
+        },
+        {
+          "condition": {
+            "flag_false": "found_lab_notes"
+          },
+          "next_event": "evt_discover_child",
+          "narrative": "ขณะที่เฮลิคอปเตอร์กำลังจะบินขึ้น มีเสียงร้องของเด็กดังมาจากบันไดหนีไฟ..."
+        }
+      ]
+    },
+    "evt_ending_new_world": {
+      "id": "evt_ending_new_world",
+      "title": "ตอนจบที่ 1 — โลกใหม่",
+      "is_ending": true,
+      "ending_id": "ending_1_new_world",
+      "image_hint": "sunrise_empty_city_peaceful",
+      "ending_type": "continue",
+      "description": "ความเงียบสงบแบบที่ไม่เคยรู้สึกมาก่อน [ชื่อ] นั่งลงที่ขอบดาดฟ้า มองดูเมืองที่กำลังค่อย ๆ เปลี่ยนแปลง",
+      "ending_narration": "บางทีโลกไม่ได้ 'ล่มสลาย' — มันแค่เปลี่ยนไป และ [ชื่อ] ก็เลือกที่จะเปลี่ยนไปพร้อมกับมัน วันพรุ่งนี้ยังคงมาถึง และทุกวันนั้นก็จะมีโอกาสใหม่ ๆ เสมอ",
+      "unlock": "infinity_mode",
+      "choices": [
+        {
+          "id": "c1",
+          "text": "เล่นต่อในโหมด Infinity",
+          "effects": {},
+          "next_event": null,
+          "action": "unlock_infinity_mode"
+        }
+      ]
+    },
+    "evt_ending_hope": {
+      "id": "evt_ending_hope",
+      "title": "ตอนจบที่ 5 — ความหวัง",
+      "is_ending": true,
+      "ending_id": "ending_5_hope",
+      "image_hint": "lab_vaccine_discovery_light",
+      "ending_type": "static_scene",
+      "ending_narration": "บันทึกของดร.วีรพลกลายเป็นกุญแจสำคัญที่ทีมวิจัยนานาชาติตามหา ภายใน 3 เดือน วัคซีนต้นแบบถูกพัฒนาต่อจนสำเร็จ [ชื่อ] ไม่ได้เพียงแค่รอดชีวิต — แต่ได้ช่วยเปลี่ยนโชคชะตาของมนุษยชาติทั้งหมด บางครั้งคนธรรมดาที่อยู่ถูกที่ถูกเวลา คือคนที่เปลี่ยนโลกได้",
+      "choices": [
+        {
+          "id": "c1",
+          "text": "จบเกม",
+          "action": "show_credits"
+        },
+        {
+          "id": "c2",
+          "text": "เล่นใหม่",
+          "action": "restart"
+        }
+      ]
+    },
+    "evt_ending_death": {
+      "id": "evt_ending_death",
+      "is_ending": true,
+      "ending_id": "ending_2_death",
+      "trigger": {
+        "hp": 0,
+        "or_flag": {
+          "bad_choice_streak": {
+            "gte": 3
+          }
+        }
+      },
+      "image_hint": "game_over_body_on_floor",
+      "ending_type": "game_over",
+      "description_hp_zero": "HP ถึง 0 แล้ว [ชื่อ] ล้มลงที่พื้น ความมืดค่อย ๆ คืบคลานเข้ามา...",
+      "description_bad_choices": "การตัดสินใจที่ผิดพลาดซ้ำแล้วซ้ำเล่าพาไปสู่จุดสิ้นสุด กลุ่มผู้รอดชีวิตที่ไม่เป็นมิตรล้อมไว้ทุกทาง ไม่มีทางออก",
+      "ending_narration": "คุณตาย! การดื้อรั้นครั้งล่าสุดนำไปสู่ความตายอันสยดสยอง",
+      "choices": [
+        {
+          "id": "c1",
+          "text": "เริ่มเกมใหม่",
+          "condition": "all_modes",
+          "action": "restart"
+        },
+        {
+          "id": "c2",
+          "text": "โหลด Checkpoint (เฉพาะ Easy/Normal)",
+          "condition": {
+            "difficulty_not": "hard"
+          },
+          "action": "load_checkpoint"
+        }
+      ]
+    },
+    "evt_ending_zombie": {
+      "id": "evt_ending_zombie",
+      "is_ending": true,
+      "ending_id": "ending_3_zombie",
+      "trigger": {
+        "easy": {
+          "bite_count": {
+            "gte": 20
+          }
+        },
+        "normal": {
+          "bite_count": {
+            "gte": 10
+          }
+        },
+        "hard": {
+          "bite_count": {
+            "gte": 3
+          }
+        }
+      },
+      "image_hint": "transformation_mirror_zombie",
+      "ending_type": "static_scene",
+      "description": "[ชื่อ] มองเข้าไปในกระจกบานเก่า สีตาเริ่มเปลี่ยน เส้นเลือดดำเริ่มปรากฏบนผิวหนัง ความคิดค่อย ๆ เลือนหาย...",
+      "ending_narration": "บาดแผลจากการถูกกัดสะสมมากเกินไปจนไวรัสแพร่กระจายทั่วร่างกาย [ชื่อ] กลายเป็นสิ่งที่หวาดกลัวที่สุด — อีกหนึ่งชีวิตที่ถูกกลืนหายไปในฝูงแห่งความมืด",
+      "choices": [
+        {
+          "id": "c1",
+          "text": "เริ่มเกมใหม่",
+          "action": "restart"
+        }
+      ]
+    },
+    "evt_missed_rescue": {
+      "id": "evt_missed_rescue",
+      "title": "พลาดการอพยพ",
+      "image_hint": "helicopter_distant_sky",
+      "description": "วันที่ 3 ผ่านไป ไม่มีสัญญาณ ไม่มีเฮลิคอปเตอร์ ไม่รู้เลยว่ามีการช่วยเหลือ [ชื่อ] ยังคงมีชีวิตอยู่ ยังคงต่อสู้ต่อไป",
+      "is_narrative_only": true,
+      "auto_proceed": true,
+      "narrative": "เฮลิคอปเตอร์บินผ่านในระยะไกล เสียงใบพัดเบาจนแทบไม่ได้ยิน ไม่รู้ว่ามันคืออะไร...",
+      "next_event": "evt_ending_new_world",
+      "effects": {}
+    },
+    "evt_find_dead_body": {
+      "id": "evt_find_dead_body",
+      "title": "พบร่างกาย",
+      "probability": 0.4,
+      "image_hint": "dead_body_hallway",
+      "description": "มีร่างกายนอนอยู่ตรงหัวมุม เสื้อผ้าฉีกขาด กระเป๋าอยู่ข้างกาย",
+      "choices": [
+        {
+          "id": "c1",
+          "text": "ค้นกระเป๋าของเขา",
+          "effects": {
+            "time_add_minutes": 5
+          },
+          "items_add_random": {
+            "pool": [
+              "bandage",
+              "water_bottle",
+              "lighter",
+              "canned_food"
+            ],
+            "count": 1
+          },
+          "narrative": "พบของบางอย่างที่เขาพกติดตัวมา ขอโทษนะ..."
+        },
+        {
+          "id": "c2",
+          "text": "ปล่อยไว้ตามเดิม",
+          "effects": {},
+          "narrative": "[ชื่อ] เดินผ่านไปโดยไม่แตะต้อง บางคนอาจมีครอบครัวที่รอเขาอยู่"
+        }
+      ]
+    },
+    "evt_hear_cry_room406": {
+      "id": "evt_hear_cry_room406",
+      "title": "เสียงร้องไห้",
+      "probability": 0.5,
+      "condition": {
+        "flag_false": "condo_explored"
+      },
+      "image_hint": "door_406_dim_light",
+      "description": "ได้ยินเสียงสะอื้นเบา ๆ จากห้อง 406",
+      "choices": [
+        {
+          "id": "c1",
+          "text": "เคาะประตูถาม",
+          "effects": {},
+          "next_event": "evt_room_406_knock"
+        },
+        {
+          "id": "c2",
+          "text": "เดินต่อ ไม่ยุ่งเกี่ยว",
+          "effects": {
+            "bad_choice_streak_add": 1
+          },
+          "flags_set": [
+            "ignored_neighbor"
+          ]
+        }
+      ]
+    },
+    "evt_discover_child": {
+      "id": "evt_discover_child",
+      "title": "เด็กบนดาดฟ้า",
+      "image_hint": "child_hiding_rooftop_stairwell",
+      "description": "เสียงร้องไห้แผ่วเบาดังมาจากมุมมืดข้างบันไดหนีไฟ [ชื่อ] มองเห็นเด็กหญิงตัวเล็ก ๆ อายุไม่เกิน 7-8 ขวบ นั่งกอดเข่าสั่น ตัวเธอมีรอยกัดที่แขน แต่ประหลาด — แผลไม่ลุกลาม ผิวรอบรอยกัดเป็นปกติ ดวงตาของเธอยังใสอยู่ ไม่มีวี่แววของการติดเชื้อ เจ้าหน้าที่กู้ภัยตะโกนมา 'เหลือเวลา 5 นาที! ซอมบี้กำลังขึ้นมาจากชั้นล่าง!'",
+      "choices": [
+        {
+          "id": "c1",
+          "text": "อุ้มเด็กขึ้นเฮลิคอปเตอร์ไปด้วย",
+          "effects": {
+            "time_add_minutes": 3
+          },
+          "narrative": "[ชื่อ] วิ่งไปหาเด็กหญิง เธอสั่นด้วยความกลัวแต่ยื่นมือมาให้ 'พี่จะพาน้องไปที่ปลอดภัยนะ' — แต่เสียงคำรามของฝูงซอมบี้ดังขึ้นจากบันไดเบื้องล่าง พวกมันใกล้เข้ามาแล้ว",
+          "next_event": "evt_zombies_rush_rooftop"
+        },
+        {
+          "id": "c2",
+          "text": "ไม่มีเวลาแล้ว — ขึ้นเฮลิคอปเตอร์เลย",
+          "effects": {
+            "time_add_minutes": 2,
+            "bad_choice_streak_add": 2
+          },
+          "narrative": "[ชื่อ] หันหลังให้เสียงร้องนั้น ก้าวขึ้นเฮลิคอปเตอร์ด้วยมือที่สั่น เสียงร้องของเด็กค่อย ๆ จางหายไปในเสียงใบพัด... ภาพนั้นจะติดตาไปตลอดชีวิต",
+          "next_event": "evt_ending_escape_coward",
+          "flags_set": [
+            "abandoned_child"
+          ]
+        }
+      ]
+    },
+    "evt_zombies_rush_rooftop": {
+      "id": "evt_zombies_rush_rooftop",
+      "title": "ฝูงซอมบี้บุกดาดฟ้า!",
+      "image_hint": "zombies_breaking_through_rooftop_door",
+      "description": "ประตูดาดฟ้าถูกกระแทกจนบานพับหลุด ซอมบี้หลายสิบตัวเริ่มทะลักขึ้นมา เฮลิคอปเตอร์ลอยอยู่เหนือหัวแค่เอื้อม เจ้าหน้าที่ตะโกน 'รีบขึ้นมา! เดี๋ยวนี้!' [ชื่อ] อุ้มเด็กหญิงไว้ในอ้อมแขน แต่ซอมบี้วิ่งเข้ามาเร็วเกินไป — จะขึ้นไปทั้งคู่ไม่ทัน ต้องมีคนอยู่ข้างล่างถ่วงเวลา",
+      "choices": [
+        {
+          "id": "c1",
+          "text": "ส่งเด็กขึ้นไปก่อน... แล้วหันกลับไปสู้",
+          "effects": {
+            "time_add_minutes": 5
+          },
+          "narrative": "[ชื่อ] ยกเด็กหญิงขึ้นส่งให้เจ้าหน้าที่ 'เอาน้องไปให้ปลอดภัย — เลือดของเธอสำคัญ ดูรอยกัดของเธอสิ เธอไม่ติดเชื้อ!' แล้วหันกลับมาเผชิญหน้ากับฝูงซอมบี้ หยิบอาวุธที่มีขึ้นมาเป็นครั้งสุดท้าย",
+          "next_event": "evt_sacrifice_last_stand"
+        },
+        {
+          "id": "c2",
+          "text": "พยายามขึ้นไปพร้อมกันทั้งคู่",
+          "effects": {
+            "time_add_minutes": 3
+          },
+          "narrative": "[ชื่อ] พยายามปีนเชือกขึ้นไปพร้อมเด็ก แต่น้ำหนักทำให้ช้าลง ซอมบี้คว้าขาได้ เจ้าหน้าที่รีบดึงเด็กขึ้นไป แต่ [ชื่อ] ถูกฉุดลงมา...",
+          "next_event": "evt_sacrifice_last_stand"
+        }
+      ]
+    },
+    "evt_sacrifice_last_stand": {
+      "id": "evt_sacrifice_last_stand",
+      "title": "การต่อสู้ครั้งสุดท้าย",
+      "image_hint": "survivor_last_stand_rooftop_sunset",
+      "description": "[ชื่อ] ยืนอยู่บนดาดฟ้าท่ามกลางฝูงซอมบี้ที่ล้อมรอบ เฮลิคอปเตอร์ค่อย ๆ ลอยสูงขึ้น เด็กหญิงมองลงมาจากขอบประตูเฮลิคอปเตอร์ด้วยน้ำตา [ชื่อ] ยิ้มให้เธอ — รอยยิ้มที่สงบ ราวกับว่าทุกอย่างมันคุ้มค่าแล้ว",
+      "is_skippable": false,
+      "choices": [
+        {
+          "id": "c1",
+          "text": "'ไปเถอะ... โลกยังต้องการเธอ'",
+          "effects": {
+            "time_add_minutes": 5
+          },
+          "next_event": "evt_ending_sacrifice"
+        }
+      ]
+    },
+    "evt_ending_sacrifice": {
+      "id": "evt_ending_sacrifice",
+      "title": "ตอนจบที่ 4 — การเสียสละ",
+      "is_ending": true,
+      "ending_id": "ending_4_sacrifice",
+      "image_hint": "helicopter_flying_away_rooftop_figure_alone",
+      "ending_type": "static_scene",
+      "ending_narration": "เฮลิคอปเตอร์บินขึ้นสูง เสียงการต่อสู้บนดาดฟ้าค่อย ๆ เงียบลง...\n\n[ชื่อ] สู้จนลมหายใจสุดท้าย\n\nสามเดือนต่อมา — ที่ศูนย์วิจัยนอกเมือง ทีมนักวิทยาศาสตร์ค้นพบว่าเลือดของเด็กหญิงมีแอนติบอดีที่สามารถยับยั้งเชื้อซอมบี้ได้ เธอกลายเป็น \"Patient Zero-R\" — กุญแจสำคัญในการพัฒนาวัคซีนตัวแรกของโลก\n\nในห้องทดลอง มีรูปถ่ายเล็ก ๆ ติดอยู่บนผนัง เป็นภาพเบลอ ๆ จากกล้องเฮลิคอปเตอร์ — ร่างคนยืนอยู่บนดาดฟ้าท่ามกลางฝูงซอมบี้ ใต้ภาพเขียนไว้ว่า:\n\n\"ไม่มีใครรู้ชื่อจริงของเขา แต่ทุกคนรู้ว่าเขาคือคนที่ทำให้พวกเรามีวันนี้\"\n\nเด็กหญิงที่โตขึ้นแล้ว ยืนมองภาพนั้นทุกวัน เธอจำรอยยิ้มสุดท้ายนั้นได้ — รอยยิ้มของคนที่รู้ว่าชีวิตตัวเองมีความหมาย",
+      "choices": [
+        {
+          "id": "c1",
+          "text": "จบเกม",
+          "action": "show_credits"
+        },
+        {
+          "id": "c2",
+          "text": "เล่นใหม่",
+          "action": "restart"
+        }
+      ]
+    },
+    "evt_ending_escape_coward": {
+      "id": "evt_ending_escape_coward",
+      "title": "ตอนจบที่ 4b — ผู้รอดชีวิต (ที่ทิ้งทุกอย่างไว้ข้างหลัง)",
+      "is_ending": true,
+      "ending_id": "ending_4_escape_coward",
+      "image_hint": "survivor_alone_camp_haunted",
+      "ending_type": "static_scene",
+      "ending_narration": "[ชื่อ] มาถึงที่หลบภัยนอกเมือง ร่างกายปลอดภัยแล้ว แต่จิตใจไม่เคยออกจากดาดฟ้านั้นได้เลย\n\nทุกคืน เสียงร้องของเด็กหญิงดังก้องในหัว ภาพตาที่วิงวอนขอความช่วยเหลือ — แล้ว [ชื่อ] ก็หันหลังให้\n\nรอดมาได้... แต่จะเรียกว่า \"มีชีวิตอยู่\" ได้จริงหรือ?",
+      "choices": [
+        {
+          "id": "c1",
+          "text": "จบเกม",
+          "action": "show_credits"
+        },
+        {
+          "id": "c2",
+          "text": "เล่นใหม่",
+          "action": "restart"
+        }
+      ]
+    }
+  },
+  "items_catalog": {
+    "kitchen_knife": {
+      "name": "มีดทำครัว",
+      "type": "weapon",
+      "dmg": [
+        10,
+        15
+      ],
+      "rarity": "common"
+    },
+    "police_baton": {
+      "name": "กระบองตำรวจ",
+      "type": "weapon",
+      "dmg": [
+        18,
+        25
+      ],
+      "rarity": "uncommon"
+    },
+    "canned_food": {
+      "name": "อาหารกระป๋อง",
+      "type": "food",
+      "hunger_restore": 30,
+      "rarity": "common"
+    },
+    "instant_noodle": {
+      "name": "มาม่า",
+      "type": "food",
+      "hunger_restore": 15,
+      "requires": "water_bottle",
+      "rarity": "common"
+    },
+    "water_bottle": {
+      "name": "น้ำดื่ม",
+      "type": "drink",
+      "thirst_restore": 35,
+      "rarity": "common"
+    },
+    "bandage": {
+      "name": "ผ้าพันแผล",
+      "type": "medical",
+      "hp_restore": 10,
+      "rarity": "common"
+    },
+    "antiseptic": {
+      "name": "ยาฆ่าเชื้อ",
+      "type": "medical",
+      "bite_risk_reduce": 0.2,
+      "rarity": "uncommon"
+    },
+    "painkillers": {
+      "name": "ยาแก้ปวด",
+      "type": "medical",
+      "fatigue_restore": 20,
+      "rarity": "uncommon"
+    },
+    "first_aid_kit": {
+      "name": "ชุดปฐมพยาบาล",
+      "type": "medical",
+      "hp_restore": 35,
+      "rarity": "rare"
+    },
+    "saline": {
+      "name": "น้ำเกลือ",
+      "type": "medical",
+      "thirst_restore": 50,
+      "hp_restore": 5,
+      "rarity": "uncommon"
+    },
+    "flashlight": {
+      "name": "ไฟฉาย",
+      "type": "tool",
+      "signal_power": 0.6,
+      "rarity": "common"
+    },
+    "flashlight_tactical": {
+      "name": "ไฟฉายยุทธวิธี",
+      "type": "tool",
+      "signal_power": 0.8,
+      "rarity": "uncommon"
+    },
+    "battery_aa": {
+      "name": "ถ่านไฟฉาย AA",
+      "type": "tool",
+      "rarity": "common"
+    },
+    "duct_tape": {
+      "name": "เทปกาวดักท์เทป",
+      "type": "tool",
+      "use": "barricade",
+      "rarity": "common"
+    },
+    "flare": {
+      "name": "พลุสัญญาณ",
+      "type": "tool",
+      "signal_power": 0.95,
+      "one_use": true,
+      "rarity": "rare"
+    },
+    "lighter": {
+      "name": "ไฟแช็ก",
+      "type": "tool",
+      "rarity": "common"
+    },
+    "emergency_radio": {
+      "name": "วิทยุฉุกเฉิน",
+      "type": "key_item",
+      "requires": "battery_aa",
+      "rarity": "rare"
+    },
+    "lab_notes_red_envelope": {
+      "name": "ซองแดง — บันทึกดร.วีรพล",
+      "type": "key_item",
+      "rarity": "unique"
+    }
+  },
+  "skill_levels": {
+    "melee": {
+      "base_success": 0.5,
+      "level_thresholds": [
+        0,
+        20,
+        50,
+        100,
+        180,
+        300
+      ],
+      "per_level_bonus": 0.05,
+      "description": "ยิ่งสูง ยิ่งมีโอกาสสำเร็จในการต่อสู้ประชิด"
+    },
+    "scavenge": {
+      "base_success": 0.5,
+      "level_thresholds": [
+        0,
+        15,
+        40,
+        80,
+        150,
+        250
+      ],
+      "per_level_bonus": 0.04,
+      "description": "ยิ่งสูง ยิ่งพบของมากขึ้นและเสียเวลาน้อยลงในการค้นหา"
+    }
+  },
+  "random_event_pool": {
+    "_note": "สุ่มได้ระหว่างเดินทาง โอกาส 50/50 ต่อการเดินทางแต่ละครั้ง",
+    "events": [
+      "evt_zombie_in_hallway",
+      "evt_find_dead_body",
+      "evt_store_zombie_ambush",
+      "evt_hear_cry_room406",
+      "evt_station_zombie_patrol",
+      "evt_clinic_zombie_patient",
+      "evt_rain_event",
+      "evt_find_supply_cache"
+    ]
+  },
+  "time_skip_costs": {
+    "_note": "ค่าสถานะที่ลดลงต่อชั่วโมงในเกม",
+    "hunger_per_hour": {
+      "easy": 2,
+      "normal": 4,
+      "hard": 7
+    },
+    "thirst_per_hour": {
+      "easy": 3,
+      "normal": 5,
+      "hard": 8
+    },
+    "fatigue_restore_per_hour_sleep": 12,
+    "fatigue_per_hour_awake": 2
+  },
+  "happy_ending_path_summary": {
+    "_note": "เส้นทางที่สั้นที่สุดไปตอนจบที่ 4 หรือ 5 ใช้เวลา ~45 นาทีจริง",
+    "optimal_route": [
+      {
+        "step": 1,
+        "action": "ค้นห้องพัก → ได้มีดทำครัว + น้ำ",
+        "real_time": "0-2 min"
+      },
+      {
+        "step": 2,
+        "action": "ออกไปทางเดินคอนโด → ค้นห้องอื่น + เจอป้าสมใจ",
+        "real_time": "2-10 min"
+      },
+      {
+        "step": 3,
+        "action": "ไปห้อง 408 → ได้วิทยุฉุกเฉิน",
+        "real_time": "10-15 min"
+      },
+      {
+        "step": 4,
+        "action": "ไปร้านสะดวกซื้อ → ได้แบตถ่าน + เจอ 'ต้น' รู้จุดนัดพบ",
+        "real_time": "15-22 min"
+      },
+      {
+        "step": 5,
+        "action": "ซ่อมวิทยุ → รับสัญญาณ รู้รหัสสัญญาณ",
+        "real_time": "22-25 min"
+      },
+      {
+        "step": 6,
+        "action": "ไปคลินิก → หายา + พบบันทึกดร.วีรพล (ถ้าต้องการ ending 5)",
+        "real_time": "25-35 min"
+      },
+      {
+        "step": 7,
+        "action": "ขึ้นดาดฟ้า → ส่งสัญญาณด้วยพลุหรือไฟฉาย",
+        "real_time": "35-40 min"
+      },
+      {
+        "step": 8,
+        "action": "วันที่ 3 เช้า → เฮลิคอปเตอร์มาถึง → ตัดสินใจ",
+        "real_time": "40-45 min"
+      }
+    ]
+  }
+}
