@@ -72,4 +72,8 @@
 	  <Folder Include="Data/" />
 	</ItemGroup>
 
+	<ItemGroup>
+	  <MauiImage Include="Resources\Images\female\select_char_female.png" />
+	</ItemGroup>
+
 </Project>
