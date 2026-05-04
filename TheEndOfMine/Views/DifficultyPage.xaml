@@ -2,11 +2,62 @@
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="TheEndOfMine.Views.DifficultyPage"
-             Title="DifficultyPage">
-    <VerticalStackLayout>
-        <Label 
-            Text="Welcome to .NET MAUI!"
-            VerticalOptions="Center" 
-            HorizontalOptions="Center" />
-    </VerticalStackLayout>
+             BackgroundColor="Black"
+             Shell.NavBarIsVisible="False">
+
+    <Grid>
+        <!-- 1. รูปพื้นหลังหลัก -->
+        <Image Source="difficulty_select.png" Aspect="AspectFill" />
+
+        <!-- 2. เลเยอร์ปุ่มล่องหน -->
+        <AbsoluteLayout>
+            <!-- ปุ่ม EASY: กดแล้วขึ้น Pop-up ทันที -->
+            <Button BackgroundColor="Transparent"
+                Clicked="OnEasyTapped"
+                AbsoluteLayout.LayoutBounds="0.5, 0.399, 280, 57"
+                AbsoluteLayout.LayoutFlags="PositionProportional" />
+
+            <!-- ปุ่ม NORMAL: กดแล้วขึ้น Pop-up ทันที -->
+            <Button BackgroundColor="Transparent"
+                Clicked="OnNormalTapped"
+                AbsoluteLayout.LayoutBounds="0.5, 0.575, 280, 57"
+                AbsoluteLayout.LayoutFlags="PositionProportional" />
+
+            <!-- ปุ่ม HARD: กดแล้วขึ้น Pop-up ทันที -->
+            <Button BackgroundColor="Transparent"
+                Clicked="OnHardTapped"
+                AbsoluteLayout.LayoutBounds="0.5, 0.750, 280, 57"
+                AbsoluteLayout.LayoutFlags="PositionProportional" />
+        </AbsoluteLayout>
+
+        <!-- 3. Pop-up ยืนยัน -->
+        <Grid x:Name="ConfirmPopup" IsVisible="False" BackgroundColor="#AA000000">
+            <!-- ใส่ x:Name ให้ Frame และตั้ง TranslationY ไว้ที่ -1000 เพื่อซ่อนไว้ข้างบน -->
+            <Frame x:Name="PopupFrame" 
+           VerticalOptions="Center" HorizontalOptions="Center" 
+           BackgroundColor="#1A1A1A" BorderColor="#D4A017" 
+           Padding="25" WidthRequest="320" CornerRadius="0"
+           TranslationY="-1000">
+
+                <VerticalStackLayout Spacing="20">
+                    <Label Text="CONFIRM SELECTION?" 
+                   TextColor="#D4A017" FontSize="20" 
+                   FontAttributes="Bold" HorizontalTextAlignment="Center"/>
+
+                    <Label x:Name="DifficultyLabel" 
+                   Text="NORMAL MODE" 
+                   TextColor="White" FontSize="18" HorizontalTextAlignment="Center"/>
+
+                    <Grid ColumnDefinitions="*,*" ColumnSpacing="15">
+                        <Button Grid.Column="0" Text="CANCEL" 
+                        BackgroundColor="#333333" TextColor="White"
+                        Clicked="OnCancelPopupClicked" CornerRadius="0"/>
+                        <Button Grid.Column="1" Text="ACCEPT" 
+                        BackgroundColor="#D4A017" TextColor="Black"
+                        Clicked="OnAcceptPopupClicked" CornerRadius="0"/>
+                    </Grid>
+                </VerticalStackLayout>
+            </Frame>
+        </Grid>
+    </Grid>
 </ContentPage>

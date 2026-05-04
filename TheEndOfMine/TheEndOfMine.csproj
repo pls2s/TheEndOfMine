@@ -60,10 +60,6 @@
 	</ItemGroup>
 
 	<ItemGroup>
-	  <Compile Include="Resources/Raw/events.json" />
-	</ItemGroup>
-
-	<ItemGroup>
 		<PackageReference Include="Microsoft.Maui.Controls" Version="$(MauiVersion)" />
 		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="9.0.9" />
 	</ItemGroup>
@@ -74,6 +70,7 @@
 
 	<ItemGroup>
 	  <MauiImage Include="Resources\Images\female\select_char_female.png" />
+	  <MauiImage Include="Resources\Images\male\select_char_male.png" />
 	</ItemGroup>
 
 </Project>

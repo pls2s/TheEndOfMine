@@ -1,24 +1,46 @@
+using System.Text.Json.Serialization;
+
 namespace TheEndOfMine.Models;
 
 public class EventChoice
 {
+    [JsonPropertyName("id")]
     public string Id { get; set; } = string.Empty;
+
+    [JsonPropertyName("text")]
     public string Text { get; set; } = string.Empty;
 
-    // ผลกระทบต่อ stats (บวก = ดี, ลบ = เสีย)
+    // ผลกระทบต่อ stats
+    [JsonPropertyName("hpEffect")]
     public float HpEffect { get; set; }
+
+    [JsonPropertyName("hungerEffect")]
     public float HungerEffect { get; set; }
+
+    [JsonPropertyName("thirstEffect")]
     public float ThirstEffect { get; set; }
+
+    [JsonPropertyName("fatigueEffect")]
     public float FatigueEffect { get; set; }
 
+    [JsonPropertyName("itemReward")]
     public Item? ItemReward { get; set; }
+
+    [JsonPropertyName("resultText")]
     public string ResultText { get; set; } = string.Empty;
 }
 
 public class GameEvent
 {
+    [JsonPropertyName("id")]
     public string Id { get; set; } = string.Empty;
+
+    [JsonPropertyName("title")]
     public string Title { get; set; } = string.Empty;
+
+    [JsonPropertyName("description")]
     public string Description { get; set; } = string.Empty;
+
+    [JsonPropertyName("choices")]
     public List<EventChoice> Choices { get; set; } = new();
 }
