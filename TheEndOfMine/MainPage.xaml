@@ -6,28 +6,25 @@
              Shell.NavBarIsVisible="False"
              NavigationPage.HasNavigationBar="False">
 
+    <!-- Outermost Grid (ไม่มี Padding) -->
     <Grid>
-        <!-- 1. เลเยอร์ล่างสุด: ใช้ WebView เล่นวิดีโอ (ใส่ x:Name ไว้เรียกใน C#) -->
+
+        <!-- ================= 1. เลเยอร์ล่างสุด: WebView เล่นวิดีโอ ================= -->
         <WebView x:Name="BgWebView" 
                  HorizontalOptions="Fill" 
                  VerticalOptions="Fill" 
                  InputTransparent="True" />
 
-        <!-- 2. เลเยอร์ UI หลัก -->
+        <!-- ================= 2. เลเยอร์ UI หลัก (มี Padding ขอบจอ) ================= -->
         <Grid Padding="15">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
-                <!-- แถบสถานะด้านบน -->
                 <RowDefinition Height="*" />
-                <!-- พื้นที่ว่างตรงกลางให้เห็นตัวละคร -->
                 <RowDefinition Height="Auto" />
-                <!-- แถบด้านล่าง -->
             </Grid.RowDefinitions>
 
-            <!-- ================= ส่วนบน: Status & Inventory ================= -->
+            <!-- ส่วนบน: Status & Inventory -->
             <Grid Grid.Row="0" ColumnDefinitions="*, Auto">
-
-                <!-- กรอบหลอดเลือดฝั่งซ้าย -->
                 <Frame Grid.Column="0" BackgroundColor="#88000000" BorderColor="#555555" Padding="10" CornerRadius="5" HorizontalOptions="Start">
                     <VerticalStackLayout Spacing="5" WidthRequest="150">
                         <Grid ColumnDefinitions="25, *">
@@ -49,47 +46,52 @@
                     </VerticalStackLayout>
                 </Frame>
 
-                <!-- ปุ่ม Inventory ฝั่งขวา (เปลี่ยนรูปเป็น inv_btn.png แล้ว) -->
                 <VerticalStackLayout Grid.Column="1" Spacing="2" HorizontalOptions="End">
                     <ImageButton Source="inv_btn.png" WidthRequest="60" HeightRequest="60" BackgroundColor="Transparent" />
                     <Label Text="INVENTORY" TextColor="White" FontSize="10" HorizontalOptions="Center" />
                 </VerticalStackLayout>
             </Grid>
 
-            <!-- ================= ส่วนกลาง: ปุ่มบนฉาก (ประตู / เตียง) ================= -->
-            <!-- ใช้ AbsoluteLayout เพื่อบังคับตำแหน่งปุ่มให้ตรงกับของในรูปภาพได้เป๊ะๆ -->
+            <!-- ส่วนกลาง: ปุ่มบนฉาก (ประตู / เตียง) -->
             <AbsoluteLayout Grid.Row="1" HorizontalOptions="Fill" VerticalOptions="Fill">
-
-                <!-- ปุ่มออกไปข้างนอก (ประตู) -->
                 <Button Text="GO OUTSIDE" 
-                        Command="{Binding GoOutsideCommand}"
-                        AbsoluteLayout.LayoutBounds="0.05, 0.4, 120, 45"
-                        AbsoluteLayout.LayoutFlags="PositionProportional"
-                        BackgroundColor="#88000000" TextColor="White" BorderColor="Gray" BorderWidth="1" CornerRadius="5" />
+                    Command="{Binding GoOutsideCommand}"
+                    AbsoluteLayout.LayoutBounds="0.0001, 0.4, 110, 45"
+                    AbsoluteLayout.LayoutFlags="PositionProportional"
+                    BackgroundColor="#88000000" TextColor="White" BorderColor="Gray" BorderWidth="1" CornerRadius="5" />
 
-                <!-- ปุ่มพักผ่อน (เตียง) -->
-                <VerticalStackLayout AbsoluteLayout.LayoutBounds="1, 0.6, 120, AutoSize"
-                                     AbsoluteLayout.LayoutFlags="PositionProportional"
-                                     Spacing="5">
-                    <Button Text="REST/SLEEP" 
-                            Command="{Binding RestCommand}" 
-                            BackgroundColor="#88000000" TextColor="White" BorderColor="Gray" BorderWidth="1" CornerRadius="5"/>
+                <!-- ===== เปลี่ยนกลุ่มปุ่ม REST ใหม่ ===== -->
+                <VerticalStackLayout AbsoluteLayout.LayoutBounds="1, 0.6, 100, AutoSize"
+                         AbsoluteLayout.LayoutFlags="PositionProportional"
+                         Spacing="5">
 
-                    <Picker SelectedIndex="{Binding SelectedRestIndex}" 
-                            BackgroundColor="#88000000" TextColor="White" Title="Hours">
-                        <Picker.ItemsSource>
-                            <x:Array Type="{x:Type x:String}">
-                                <x:String>4H</x:String>
-                                <x:String>8H</x:String>
-                            </x:Array>
-                        </Picker.ItemsSource>
-                    </Picker>
+                    <!-- ใช้ Frame ครอบ Label เพื่อสร้างกล่องที่มีขอบและพื้นหลัง -->
+                    <Frame BackgroundColor="#88000000" 
+               BorderColor="Gray" 
+               CornerRadius="5" 
+               Padding="0,8" 
+               HasShadow="False">
+
+                        <Label Text="REST / SLEEP" 
+                   TextColor="LightGray" 
+                   FontSize="12" 
+                   HorizontalOptions="Center" 
+                   FontAttributes="Bold"/>
+                    </Frame>
+
+                    <Button x:Name="Btn4H" Text="4 HOURS" 
+                BackgroundColor="#88000000" TextColor="White" BorderColor="Gray" BorderWidth="1" CornerRadius="5"
+                Clicked="OnRest4HClicked"/>
+
+                    <Button x:Name="Btn8H" Text="8 HOURS" 
+                BackgroundColor="#88000000" TextColor="White" BorderColor="Gray" BorderWidth="1" CornerRadius="5"
+                Clicked="OnRest8HClicked"/>
+
                 </VerticalStackLayout>
             </AbsoluteLayout>
 
-            <!-- ================= ส่วนล่าง: Skills & Time ================= -->
+            <!-- ส่วนล่าง: Skills & Time -->
             <Grid Grid.Row="2" ColumnDefinitions="Auto, *">
-
                 <Frame Grid.Column="0" BackgroundColor="#88000000" BorderColor="#555555" Padding="10" CornerRadius="5">
                     <VerticalStackLayout Spacing="2">
                         <Label Text="SKILLS" TextColor="#D4A017" FontAttributes="Bold" HorizontalOptions="Center" />
@@ -106,7 +108,21 @@
                     </VerticalStackLayout>
                 </Frame>
             </Grid>
-
         </Grid>
+        <!-- จบเลเยอร์ UI หลัก -->
+
+        <!-- ================= 3. เลเยอร์ Loading Overlay (ย้ายมาตรงนี้) ================= -->
+        <!-- นำออกมาไว้ข้างนอกสุด เพื่อไม่ให้ติด Padding ของ Grid ด้านบน -->
+        <Grid x:Name="LoadingOverlay" BackgroundColor="Black" IsVisible="True" ZIndex="999">
+            <VerticalStackLayout HorizontalOptions="Center" VerticalOptions="Center" Spacing="20">
+                <ActivityIndicator IsRunning="True" Color="#D4A017" WidthRequest="50" HeightRequest="50" />
+                <Label Text="ENTERING THE WORLD..." 
+                       TextColor="#D4A017" 
+                       FontSize="18" 
+                       FontAttributes="Bold" 
+                       HorizontalTextAlignment="Center"/>
+            </VerticalStackLayout>
+        </Grid>
+
     </Grid>
 </ContentPage>
