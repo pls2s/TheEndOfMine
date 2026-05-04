@@ -2,11 +2,61 @@
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="TheEndOfMine.Views.IntroPage"
-             Title="IntroPage">
-    <VerticalStackLayout>
-        <Label 
-            Text="Welcome to .NET MAUI!"
-            VerticalOptions="Center" 
-            HorizontalOptions="Center" />
-    </VerticalStackLayout>
+             BackgroundColor="Black"
+             Shell.NavBarIsVisible="False"
+             NavigationPage.HasNavigationBar="False">
+
+    <Grid>
+        <!-- 1. เลเยอร์เกมหลัก (สว่างรอไว้เลย) -->
+        <Grid x:Name="GameLayer">
+            <!-- ตั้งรูปตั้งต้นเป็นผู้หญิง (ตรวจสอบชื่อไฟล์ให้ตรงกับในเครื่อง) -->
+            <Image x:Name="BackgroundImage" 
+               Source="select_char_female.png"  
+               Aspect="AspectFill" />
+
+            <!-- ม่านดำสำหรับตอนเฟดสลับตัวละคร -->
+            <BoxView x:Name="FadeOverlay"
+                 Color="Black"
+                 Opacity="0"
+                 InputTransparent="True" />
+            <AbsoluteLayout x:Name="SelectionUI">
+                <!-- ปุ่มเลือกชาย -->
+                <ImageButton x:Name="MaleButton" 
+                         BackgroundColor="Transparent"
+                         AbsoluteLayout.LayoutBounds="0.21, 0.68, 120, 120"
+                         AbsoluteLayout.LayoutFlags="PositionProportional"
+                         Clicked="OnMaleClicked" />
+
+                <!-- ปุ่มเลือกหญิง -->
+                <ImageButton x:Name="FemaleButton" 
+                         BackgroundColor="Transparent"
+                         AbsoluteLayout.LayoutBounds="0.77, 0.68, 120, 120"
+                         AbsoluteLayout.LayoutFlags="PositionProportional"
+                         Clicked="OnFemaleClicked" />
+
+                <!-- ช่องใส่ชื่อ -->
+                <Entry x:Name="NameEntry" 
+                   TextColor="White"
+                   HorizontalTextAlignment="Center"
+                   BackgroundColor="Transparent"
+                   FontSize="25"
+                   AbsoluteLayout.LayoutBounds="0.5, 0.839, 300, 50"
+                   AbsoluteLayout.LayoutFlags="PositionProportional" />
+
+                <!-- ปุ่มเริ่มเกม -->
+                <Button x:Name="StartButton" 
+                    BackgroundColor="Transparent"
+                    AbsoluteLayout.LayoutBounds="0.5, 0.95, 280, 65"
+                    AbsoluteLayout.LayoutFlags="PositionProportional"
+                    Clicked="OnStartClicked" />
+            </AbsoluteLayout>
+        </Grid>
+
+        <!-- 2. หน้าปก Loading -->
+        <Grid x:Name="TitleLayer" BackgroundColor="Black">
+            <Image Source="loading_screen_portrait.png" Aspect="AspectFill" />
+            <Label x:Name="TapToStartLabel" Text="— TAP TO START —" TextColor="White" HorizontalOptions="Center" VerticalOptions="End" Margin="0,0,0,100" />
+            <Button BackgroundColor="Transparent" HorizontalOptions="Fill" VerticalOptions="Fill" Clicked="OnTapToStartClicked" />
+        </Grid>
+    </Grid>
 </ContentPage>

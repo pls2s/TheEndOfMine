@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace TheEndOfMine.Models;
@@ -81,6 +81,88 @@ public class RandomEventPool
 {
     [JsonPropertyName("events")]
     public List<string> Events { get; set; } = new();
+}
+
+// ---- Story Event Models (เพิ่มใหม่) ----
+
+public class StoryEvent
+{
+    [JsonPropertyName("id")] public string Id { get; set; } = string.Empty;
+    [JsonPropertyName("title")] public string Title { get; set; } = string.Empty;
+    [JsonPropertyName("day_trigger")] public int? DayTrigger { get; set; }
+    [JsonPropertyName("time_trigger")] public string? TimeTrigger { get; set; }
+    [JsonPropertyName("probability")] public float? Probability { get; set; }
+    [JsonPropertyName("image_hint")] public string? ImageHint { get; set; }
+    [JsonPropertyName("description")] public string? Description { get; set; }
+    [JsonPropertyName("is_skippable")] public bool? IsSkippable { get; set; }
+    [JsonPropertyName("is_narrative_only")] public bool? IsNarrativeOnly { get; set; }
+    [JsonPropertyName("auto_proceed")] public bool? AutoProceed { get; set; }
+    [JsonPropertyName("auto_proceed_to_event")] public string? AutoProceedToEvent { get; set; }
+    [JsonPropertyName("narrative")] public string? Narrative { get; set; }
+    [JsonPropertyName("next_event")] public string? NextEvent { get; set; }
+    [JsonPropertyName("condition")] public Dictionary<string, JsonElement>? Condition { get; set; }
+    [JsonPropertyName("condition_branch")] public List<StoryConditionBranch>? ConditionBranch { get; set; }
+    [JsonPropertyName("choices")] public List<StoryEventChoice>? Choices { get; set; }
+    [JsonPropertyName("requires_flag")] public string? RequiresFlag { get; set; }
+    [JsonPropertyName("requires_flags")] public List<string>? RequiresFlags { get; set; }
+
+    // Ending Fields
+    [JsonPropertyName("is_ending")] public bool? IsEnding { get; set; }
+    [JsonPropertyName("ending_id")] public string? EndingId { get; set; }
+    [JsonPropertyName("ending_type")] public string? EndingType { get; set; }
+    [JsonPropertyName("ending_narration")] public string? EndingNarration { get; set; }
+    [JsonPropertyName("unlock")] public string? Unlock { get; set; }
+}
+
+public class StoryConditionBranch
+{
+    [JsonPropertyName("condition")] public Dictionary<string, JsonElement>? Condition { get; set; }
+    [JsonPropertyName("next_event")] public string? NextEvent { get; set; }
+    [JsonPropertyName("narrative")] public string? Narrative { get; set; }
+}
+
+public class StoryEventChoice
+{
+    [JsonPropertyName("id")] public string Id { get; set; } = string.Empty;
+    [JsonPropertyName("text")] public string Text { get; set; } = string.Empty;
+    [JsonPropertyName("requires")] public Dictionary<string, JsonElement>? Requires { get; set; }
+    [JsonPropertyName("effects")] public Dictionary<string, JsonElement>? Effects { get; set; }
+    [JsonPropertyName("effects_success")] public Dictionary<string, JsonElement>? EffectsSuccess { get; set; }
+    [JsonPropertyName("effects_fail")] public Dictionary<string, JsonElement>? EffectsFail { get; set; }
+    [JsonPropertyName("success_chance_base")] public float? SuccessChanceBase { get; set; }
+    [JsonPropertyName("success_chance")] public float? SuccessChance { get; set; }
+    [JsonPropertyName("success_modifier_skill")] public Dictionary<string, JsonElement>? SuccessModifierSkill { get; set; }
+    [JsonPropertyName("narrative")] public string? Narrative { get; set; }
+    [JsonPropertyName("narrative_success")] public string? NarrativeSuccess { get; set; }
+    [JsonPropertyName("narrative_fail")] public string? NarrativeFail { get; set; }
+    [JsonPropertyName("next_event")] public string? NextEvent { get; set; }
+    [JsonPropertyName("next_event_success")] public string? NextEventSuccess { get; set; }
+    [JsonPropertyName("next_event_fail")] public string? NextEventFail { get; set; }
+    [JsonPropertyName("flags_set")] public List<string>? FlagsSet { get; set; }
+    [JsonPropertyName("flags_set_success")] public List<string>? FlagsSetSuccess { get; set; }
+    [JsonPropertyName("items_add")] public List<string>? ItemsAdd { get; set; }
+    [JsonPropertyName("items_remove")] public List<string>? ItemsRemove { get; set; }
+    [JsonPropertyName("items_remove_one")] public List<string>? ItemsRemoveOne { get; set; }
+    [JsonPropertyName("items_remove_one_any")] public List<string>? ItemsRemoveOneAny { get; set; }
+    [JsonPropertyName("items_add_random")] public Dictionary<string, JsonElement>? ItemsAddRandom { get; set; }
+    [JsonPropertyName("action")] public string? Action { get; set; }
+}
+
+public class StoryItem
+{
+    [JsonPropertyName("name")] public string Name { get; set; } = string.Empty;
+    [JsonPropertyName("type")] public string Type { get; set; } = string.Empty;
+    [JsonPropertyName("dmg")] public List<float>? Dmg { get; set; }
+    [JsonPropertyName("hunger_restore")] public float? HungerRestore { get; set; }
+    [JsonPropertyName("thirst_restore")] public float? ThirstRestore { get; set; }
+    [JsonPropertyName("hp_restore")] public float? HpRestore { get; set; }
+    [JsonPropertyName("fatigue_restore")] public float? FatigueRestore { get; set; }
+    [JsonPropertyName("bite_risk_reduce")] public float? BiteRiskReduce { get; set; }
+    [JsonPropertyName("signal_power")] public float? SignalPower { get; set; }
+    [JsonPropertyName("requires")] public string? Requires { get; set; }
+    [JsonPropertyName("use")] public string? Use { get; set; }
+    [JsonPropertyName("one_use")] public bool? OneUse { get; set; }
+    [JsonPropertyName("rarity")] public string Rarity { get; set; } = string.Empty;
 }
 
 // ---- Root: StoryTree ----
