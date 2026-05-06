@@ -2,11 +2,126 @@
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="TheEndOfMine.Views.InventoryPage"
+             BackgroundColor="#E6000000"
+             Shell.NavBarIsVisible="False"
+             NavigationPage.HasNavigationBar="False"
              Title="InventoryPage">
-    <VerticalStackLayout>
-        <Label 
-            Text="Welcome to .NET MAUI!"
-            VerticalOptions="Center" 
-            HorizontalOptions="Center" />
-    </VerticalStackLayout>
+
+    <!--
+        ================== โครงสร้างหน้า InventoryPage ==================
+        Backpack (1 ภาพเดียว) มี 2 ส่วนภายใน:
+          (a) ตาราง 4x4 ด้านบน
+          (b) Detail card ด้านล่าง (อยู่ในภาพเดียวกับ backpack)
+        นอกภาพ backpack ด้านล่างสุด คือปุ่ม CLOSE INVENTORY
+
+        ค่าตายตัวที่ปรับได้:
+          BACKPACK_WIDTH        = 360
+          BACKPACK_HEIGHT       = 500
+          INNER_PADDING         = 35,80,35,40       (ขอบในของ backpack — ให้เนื้อหาไม่ทับขอบรูป)
+          DETAIL_ROW_HEIGHT     = 100               (พื้นที่การ์ดรายละเอียดในกระเป๋า)
+          SLOT_SPACING          = 6
+          CLOSE_BUTTON_WIDTH    = 360
+          CLOSE_BUTTON_HEIGHT   = 60
+    -->
+
+    <Grid Padding="20">
+        <ScrollView VerticalOptions="Center" HorizontalOptions="Center">
+            <VerticalStackLayout Spacing="14"
+                                 HorizontalOptions="Center">
+
+                <!-- ================= 1. BACKPACK (4x4 + detail ในภาพเดียว) ================= -->
+                <Grid x:Name="BackpackRoot"
+                      WidthRequest="360"
+                      HeightRequest="500"
+                      HorizontalOptions="Center">
+
+                    <!-- พื้นหลังกระเป๋า -->
+                    <Image Source="backpack.png" Aspect="Fill" />
+
+                    <!-- เนื้อหาในกระเป๋า: บนเป็นตาราง 4x4 / ล่างเป็นการ์ดรายละเอียด -->
+                    <Grid Padding="35,80,35,40"
+                          RowSpacing="10">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*" />     <!-- (a) ตาราง 4x4 -->
+                            <RowDefinition Height="100" />   <!-- (b) Detail card -->
+                        </Grid.RowDefinitions>
+
+                        <!-- (a) ตาราง 4x4 (16 ช่อง) — fixed layout, ช่องละ 64x64 -->
+                        <!-- ปรับขนาดช่องที่ความกว้าง/สูงด้านล่างได้เลย (เป็น px ตายตัว) -->
+                        <Grid x:Name="SlotsGrid"
+                              Grid.Row="0"
+                              RowSpacing="6"
+                              ColumnSpacing="6"
+                              HorizontalOptions="Center"
+                              VerticalOptions="Center">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="64" />
+                                <RowDefinition Height="64" />
+                                <RowDefinition Height="64" />
+                                <RowDefinition Height="64" />
+                            </Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="64" />
+                                <ColumnDefinition Width="64" />
+                                <ColumnDefinition Width="64" />
+                                <ColumnDefinition Width="64" />
+                            </Grid.ColumnDefinitions>
+                        </Grid>
+
+                        <!-- (b) Detail — แสดงข้อความเฉยๆ ไม่มีกรอบ -->
+                        <VerticalStackLayout x:Name="DetailCard"
+                                             Grid.Row="1"
+                                             IsVisible="False"
+                                             Spacing="2"
+                                             Padding="12,8"
+                                             HorizontalOptions="Center"
+                                             VerticalOptions="Center">
+                            <!-- บรรทัด 1: ชื่อไอเทม -->
+                            <Label x:Name="DetailNameLabel"
+                                   Text="ITEM NAME"
+                                   TextColor="White"
+                                   FontAttributes="Bold"
+                                   FontSize="16"
+                                   HorizontalTextAlignment="Center"
+                                   LineBreakMode="TailTruncation"
+                                   MaxLines="1" />
+                            <!-- บรรทัด 2: rarity -->
+                            <Label x:Name="DetailRarityLabel"
+                                   Text="(Common)"
+                                   TextColor="#D4A017"
+                                   FontSize="12"
+                                   HorizontalTextAlignment="Center" />
+                            <!-- บรรทัด 3: stats -->
+                            <Label x:Name="DetailStatsLabel"
+                                   Text="Damage 0-0"
+                                   TextColor="#CCCCCC"
+                                   FontSize="12"
+                                   HorizontalTextAlignment="Center"
+                                   LineBreakMode="TailTruncation"
+                                   MaxLines="2" />
+                        </VerticalStackLayout>
+                    </Grid>
+                </Grid>
+
+                <!-- ================= 2. CLOSE INVENTORY (นอกภาพ backpack) ================= -->
+                <Grid x:Name="CloseBtn"
+                      WidthRequest="360"
+                      HeightRequest="60"
+                      HorizontalOptions="Center">
+                    <Image Source="btn.png" Aspect="Fill" />
+                    <Label Text="CLOSE INVENTORY"
+                           TextColor="White"
+                           FontAttributes="Bold"
+                           FontSize="15"
+                           HorizontalOptions="Center"
+                           VerticalOptions="Center"
+                           HorizontalTextAlignment="Center" />
+                    <Grid.GestureRecognizers>
+                        <TapGestureRecognizer Tapped="OnCloseTapped" />
+                    </Grid.GestureRecognizers>
+                </Grid>
+
+            </VerticalStackLayout>
+        </ScrollView>
+    </Grid>
 </ContentPage>

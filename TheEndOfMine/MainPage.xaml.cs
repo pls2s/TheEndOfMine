@@ -1,4 +1,4 @@
-﻿namespace TheEndOfMine;
+namespace TheEndOfMine;
 
 using TheEndOfMine.ViewModels;
 using TheEndOfMine.Data;
@@ -9,6 +9,10 @@ public partial class MainPage : ContentPage
     private readonly MainViewModel _vm;
     private readonly GameDatabase _db;
     private int _selectedRestHours = 0;
+
+    // โหลดข้อมูล + แสดงหน้า Loading แค่ครั้งแรกเท่านั้น
+    // ครั้งถัดไป (เช่น กลับมาจาก EventPopup) จะข้ามไปเลย ไม่ต้องเจอหน้าโหลดอีก
+    private bool _hasLoadedOnce = false;
 
     public MainPage()
     {
@@ -23,11 +27,15 @@ public partial class MainPage : ContentPage
     {
         base.OnAppearing();
 
+        // ถ้าเคยโหลดเสร็จแล้ว (กลับมาจาก popup/หน้าอื่น) ไม่ต้องทำอะไร
+        if (_hasLoadedOnce) return;
+        _hasLoadedOnce = true;
+
         // 1. ทำให้แน่ใจว่าหน้าต่าง Loading ปรากฏอยู่และทึบแสง 100%
         LoadingOverlay.IsVisible = true;
         LoadingOverlay.Opacity = 1;
 
-        // 2. โหลดข้อมูล Database 
+        // 2. โหลดข้อมูล Database
         var (survivor, state, inventory) = await _db.LoadAsync();
 
         if (survivor != null && _vm != null)
@@ -66,8 +74,28 @@ public partial class MainPage : ContentPage
     protected override void OnDisappearing()
     {
         base.OnDisappearing();
-        _vm?.Dispose();
+        // หมายเหตุ: ตอนเปิด EventPopup ก็จะถูกเรียก แต่ไม่อยาก dispose ViewModel ทิ้ง
+        // เพราะกลับมาจะใช้ต่อ — เลย comment _vm.Dispose() ออก
+        // _vm?.Dispose();
     }
+
+    // เปิด InventoryPage ทับเป็น modal — ตอนปิดจะกลับมาหน้านี้
+    private async void OnInventoryClicked(object sender, EventArgs e)
+    {
+        try
+        {
+            var nav = Shell.Current?.Navigation
+                      ?? Application.Current?.MainPage?.Navigation;
+            if (nav == null) return;
+
+            // useDemoIfEmpty: true → ถ้ายังไม่ได้เก็บไอเทมจริง จะโชว์ demo 16 ช่องให้เช็ค layout
+            // (ปิด flag นี้ตอนระบบเก็บไอเทมจริงพร้อมแล้ว)
+            var page = new Views.InventoryPage(_vm.CurrentInventory, useDemoIfEmpty: true);
+            await nav.PushModalAsync(page, animated: false);
+        }
+        catch { }
+    }
+
     private void OnRest4HClicked(object sender, EventArgs e)
     {
         if (_selectedRestHours == 4)
@@ -77,7 +105,7 @@ public partial class MainPage : ContentPage
         }
         else
         {
-            // กดครั้งแรก -> ไฮไลท์ปุ่ม 4H (เปลี่ยนเป็นสีทอง)
+            // กดครั้งแรก -> ไฮไลท์ปุ่ม 4H (เปลี่ยนเป็นสีฟ้า)
             _selectedRestHours = 4;
             Btn4H.BackgroundColor = Color.FromArgb("#63E5FF");
             Btn4H.TextColor = Colors.Black;
@@ -97,7 +125,7 @@ public partial class MainPage : ContentPage
         }
         else
         {
-            // กดครั้งแรก -> ไฮไลท์ปุ่ม 8H (เปลี่ยนเป็นสีทอง)
+            // กดครั้งแรก -> ไฮไลท์ปุ่ม 8H (เปลี่ยนเป็นสีฟ้า)
             _selectedRestHours = 8;
             Btn8H.BackgroundColor = Color.FromArgb("#63E5FF");
             Btn8H.TextColor = Colors.Black;
