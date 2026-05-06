@@ -79,6 +79,23 @@ public partial class MainPage : ContentPage
         // _vm?.Dispose();
     }
 
+    // เปิด InventoryPage ทับเป็น modal — ตอนปิดจะกลับมาหน้านี้
+    private async void OnInventoryClicked(object sender, EventArgs e)
+    {
+        try
+        {
+            var nav = Shell.Current?.Navigation
+                      ?? Application.Current?.MainPage?.Navigation;
+            if (nav == null) return;
+
+            // useDemoIfEmpty: true → ถ้ายังไม่ได้เก็บไอเทมจริง จะโชว์ demo 16 ช่องให้เช็ค layout
+            // (ปิด flag นี้ตอนระบบเก็บไอเทมจริงพร้อมแล้ว)
+            var page = new Views.InventoryPage(_vm.CurrentInventory, useDemoIfEmpty: true);
+            await nav.PushModalAsync(page, animated: false);
+        }
+        catch { }
+    }
+
     private void OnRest4HClicked(object sender, EventArgs e)
     {
         if (_selectedRestHours == 4)

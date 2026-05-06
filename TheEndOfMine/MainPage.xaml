@@ -47,7 +47,11 @@
                 </Frame>
 
                 <VerticalStackLayout Grid.Column="1" Spacing="2" HorizontalOptions="End">
-                    <ImageButton Source="inv_btn.png" WidthRequest="60" HeightRequest="60" BackgroundColor="Transparent" />
+                    <ImageButton Source="inv_btn.png"
+                                 WidthRequest="60"
+                                 HeightRequest="60"
+                                 BackgroundColor="Transparent"
+                                 Clicked="OnInventoryClicked" />
                     <Label Text="INVENTORY" TextColor="White" FontSize="10" HorizontalOptions="Center" />
                 </VerticalStackLayout>
             </Grid>

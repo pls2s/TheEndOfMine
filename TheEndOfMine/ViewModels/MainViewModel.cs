@@ -43,6 +43,9 @@ public class MainViewModel : INotifyPropertyChanged
     public ICommand GoOutsideCommand { get; }
     public ICommand RestCommand { get; }
 
+    // เปิดให้ View ดึง Inventory ปัจจุบันไปแสดงใน InventoryPage
+    public Inventory? CurrentInventory => _currentState?.Survivor?.Inventory;
+
     double _hpProgress;
     public double HPProgress { get => _hpProgress; set { _hpProgress = value; Raise(nameof(HPProgress)); } }
 

@@ -66,6 +66,11 @@ public class Item
     [JsonPropertyName("ammo_per_unit")]
     public int? AmmoPerUnit { get; set; }
 
+    // path รูปไอคอนของไอเทม (วางใน Resources/Images)
+    // ถ้าไม่กำหนดใน items.json จะ fallback เป็นไอคอน default ใน InventoryPage
+    [JsonPropertyName("icon_path")]
+    public string IconPath { get; set; } = string.Empty;
+
     // ปรับ Logic ให้ดึงจาก Effects
     public bool IsUsable => Effects != null && (
         Effects.HpRestore.GetValueOrDefault() != 0 ||
