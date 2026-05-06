@@ -2,11 +2,131 @@
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="TheEndOfMine.Views.EventPopup"
+             BackgroundColor="#CC000000"
+             Shell.NavBarIsVisible="False"
+             NavigationPage.HasNavigationBar="False"
              Title="EventPopup">
-    <VerticalStackLayout>
-        <Label 
-            Text="Welcome to .NET MAUI!"
-            VerticalOptions="Center" 
-            HorizontalOptions="Center" />
-    </VerticalStackLayout>
+
+    <!--
+        ================== โครงสร้างหน้า EventPopup ==================
+        ทุกขนาดเป็นค่าตายตัว (fix px) เพื่อให้หน้าตาเหมือนกันทุกเหตุการณ์
+        แก้ขนาดได้ที่ค่าด้านล่างเลย:
+
+          CARD_WIDTH        = 340
+          CARD_HEIGHT       = 450
+          TITLE_ROW_HEIGHT  = 50      (1-2 บรรทัด)
+          IMAGE_WIDTH       = 220
+          IMAGE_HEIGHT      = 150
+          DESC_ROW_HEIGHT   = 90      (3-4 บรรทัด)
+          BUTTON_WIDTH      = 280
+          BUTTON_HEIGHT     = 62
+    -->
+
+    <Grid Padding="20">
+        <VerticalStackLayout Spacing="18"
+                             HorizontalOptions="Center"
+                             VerticalOptions="Center">
+
+            <!-- ================= 1. CARD ================= -->
+            <Grid x:Name="CardRoot"
+                  WidthRequest="340"
+                  HeightRequest="450"
+                  HorizontalOptions="Center">
+
+                <!-- พื้นหลังการ์ด (card.png) -->
+                <Image Source="card.png" Aspect="Fill" />
+
+                <!-- เนื้อหาบนการ์ด — 3 แถวล็อกขนาดตายตัว -->
+                <Grid Padding="28,40,28,30"
+                      RowSpacing="10">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="50" />     <!-- (1) Title -->
+                        <RowDefinition Height="*" />      <!-- (2) Image -->
+                        <RowDefinition Height="90" />     <!-- (3) Description -->
+                    </Grid.RowDefinitions>
+
+                    <!-- (1) ชื่อ event -->
+                    <Label x:Name="TitleLabel"
+                           Grid.Row="0"
+                           Text="EVENT TITLE"
+                           TextColor="White"
+                           FontAttributes="Bold"
+                           FontSize="20"
+                           HorizontalTextAlignment="Center"
+                           VerticalTextAlignment="Center"
+                           LineBreakMode="WordWrap"
+                           MaxLines="2" />
+
+                    <!-- (2) ภาพเหตุการณ์ — ขนาดคงที่ -->
+                    <Image x:Name="EventImage"
+                           Grid.Row="1"
+                           Source="icon_game.png"
+                           WidthRequest="220"
+                           HeightRequest="200"
+                           Aspect="AspectFit"
+                           HorizontalOptions="Center"
+                           VerticalOptions="Center" />
+
+                    <!-- (3) คำอธิบาย — สูงคงที่ 90, สูงสุด 4 บรรทัด เกินจะตัด -->
+                    <Label x:Name="DescriptionLabel"
+                           Grid.Row="2"
+                           Text="คำอธิบายเหตุการณ์..."
+                           TextColor="White"
+                           FontSize="13"
+                           LineHeight="1.25"
+                           HorizontalTextAlignment="Center"
+                           VerticalTextAlignment="Start"
+                           LineBreakMode="WordWrap"
+                           MaxLines="4" />
+                </Grid>
+            </Grid>
+
+            <!-- ================= 2. ปุ่มเลือก 2 ปุ่ม (แนวตั้ง) ================= -->
+
+            <!-- ปุ่มที่ 1 -->
+            <Grid x:Name="Choice1Btn"
+                  WidthRequest="280"
+                  HeightRequest="62"
+                  HorizontalOptions="Center">
+                <Image Source="btn.png" Aspect="Fill" />
+                <Label x:Name="Choice1Label"
+                       Text="ตัวเลือกที่ 1"
+                       TextColor="White"
+                       FontAttributes="Bold"
+                       FontSize="15"
+                       Padding="12,0"
+                       HorizontalOptions="Center"
+                       VerticalOptions="Center"
+                       HorizontalTextAlignment="Center"
+                       LineBreakMode="TailTruncation"
+                       MaxLines="1" />
+                <Grid.GestureRecognizers>
+                    <TapGestureRecognizer Tapped="OnChoice1Tapped" />
+                </Grid.GestureRecognizers>
+            </Grid>
+
+            <!-- ปุ่มที่ 2 -->
+            <Grid x:Name="Choice2Btn"
+                  WidthRequest="280"
+                  HeightRequest="62"
+                  HorizontalOptions="Center">
+                <Image Source="btn.png" Aspect="Fill" />
+                <Label x:Name="Choice2Label"
+                       Text="ตัวเลือกที่ 2"
+                       TextColor="White"
+                       FontAttributes="Bold"
+                       FontSize="15"
+                       Padding="12,0"
+                       HorizontalOptions="Center"
+                       VerticalOptions="Center"
+                       HorizontalTextAlignment="Center"
+                       LineBreakMode="TailTruncation"
+                       MaxLines="1" />
+                <Grid.GestureRecognizers>
+                    <TapGestureRecognizer Tapped="OnChoice2Tapped" />
+                </Grid.GestureRecognizers>
+            </Grid>
+
+        </VerticalStackLayout>
+    </Grid>
 </ContentPage>

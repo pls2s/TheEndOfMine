@@ -41,6 +41,11 @@ public class GameEvent
     [JsonPropertyName("description")]
     public string Description { get; set; } = string.Empty;
 
+    // path รูปประกอบเหตุการณ์ (วางในโฟลเดอร์ Resources/Images)
+    // ถ้าไม่กำหนดใน events.json จะ fallback เป็นรูป default ใน EventPopup
+    [JsonPropertyName("imagePath")]
+    public string ImagePath { get; set; } = string.Empty;
+
     [JsonPropertyName("choices")]
     public List<EventChoice> Choices { get; set; } = new();
 }

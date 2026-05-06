@@ -102,25 +102,23 @@ public class MainViewModel : INotifyPropertyChanged
 
     private void OnEventOccurred(GameEvent ev)
     {
-        // show choices as action sheet
+        // เปิด EventPopup ขึ้นมาให้ผู้เล่นเลือก แล้ว apply ผลลัพธ์กลับเข้า GameEngine
         MainThread.BeginInvokeOnMainThread(async () =>
         {
             try
             {
-                var page = Application.Current?.MainPage;
-                if (page == null) return;
+                var nav = Shell.Current?.Navigation
+                          ?? Application.Current?.MainPage?.Navigation;
+                if (nav == null) return;
 
-                var options = new List<string>();
-                foreach (var c in ev.Choices) options.Add(c.Text);
+                var survivorName = _currentState?.Survivor?.Name ?? string.Empty;
+                var popup = new Views.EventPopup(ev, survivorName);
 
-                var choice = await page.DisplayActionSheet(ev.Title, "Cancel", null, options.ToArray());
-                if (choice == null || choice == "Cancel") return;
+                await nav.PushModalAsync(popup, animated: false);
+                var choice = await popup.Result;
 
-                var selected = ev.Choices.Find(x => x.Text == choice);
-                if (selected != null)
-                {
-                    _engine?.ApplyEventChoice(selected);
-                }
+                if (choice != null)
+                    _engine?.ApplyEventChoice(choice);
             }
             catch { }
         });
