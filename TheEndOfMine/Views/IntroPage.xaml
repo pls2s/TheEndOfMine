@@ -11,7 +11,7 @@
         <Grid x:Name="GameLayer">
             <!-- ตั้งรูปตั้งต้นเป็นผู้หญิง (ตรวจสอบชื่อไฟล์ให้ตรงกับในเครื่อง) -->
             <Image x:Name="BackgroundImage" 
-               Source="story/ui/character_select/select_char_female.png"  
+               Source="story/ui/ui_select_char_female.png"  
                Aspect="AspectFill" />
 
             <!-- ม่านดำสำหรับตอนเฟดสลับตัวละคร -->
@@ -55,7 +55,7 @@
 
         <!-- 2. หน้าปก Loading -->
         <Grid x:Name="TitleLayer" BackgroundColor="Black">
-            <Image Source="story/ui/loading_screen_portrait.png" Aspect="AspectFill" />
+            <Image Source="story/ui/ui_loading_screen_portrait.png" Aspect="AspectFill" />
             <Label x:Name="TapToStartLabel" Text="— TAP TO START —" TextColor="White" HorizontalOptions="Center" VerticalOptions="End" Margin="0,0,0,100" />
             <Button BackgroundColor="Transparent" HorizontalOptions="Fill" VerticalOptions="Fill" Clicked="OnTapToStartClicked" />
         </Grid>
