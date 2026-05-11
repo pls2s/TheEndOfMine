@@ -19,8 +19,14 @@ public class EventService
     /// คืน event ถัดไปตาม index ใน story
     /// ถ้าเล่นจบทุก event แล้วจะคืน null (story จบ)
     /// </summary>
-    public async Task<GameEvent?> GetNextEventAsync(int currentIndex)
+    public async Task<GameEvent?> GetNextEventAsync(int currentIndex, IReadOnlyList<GameEvent>? generatedEvents = null)
     {
+        if (generatedEvents is { Count: > 0 })
+        {
+            if (currentIndex >= generatedEvents.Count) return null;
+            return generatedEvents[currentIndex];
+        }
+
         // โหลดครั้งแรก ถ้ายังไม่ได้โหลด
         _events ??= await LoadEventsAsync();
         if (_events == null || _events.Count == 0) return null;
@@ -34,8 +40,11 @@ public class EventService
     /// <summary>
     /// ตรวจว่า story จบแล้วหรือยัง
     /// </summary>
-    public async Task<bool> IsStoryCompleteAsync(int currentIndex)
+    public async Task<bool> IsStoryCompleteAsync(int currentIndex, IReadOnlyList<GameEvent>? generatedEvents = null)
     {
+        if (generatedEvents is { Count: > 0 })
+            return currentIndex >= generatedEvents.Count;
+
         _events ??= await LoadEventsAsync();
         return _events == null || currentIndex >= _events.Count;
     }

@@ -2,6 +2,7 @@
 using System;
 using System.Threading.Tasks;
 using TheEndOfMine.Models;
+using TheEndOfMine.Services;
 
 namespace TheEndOfMine.Views;
 
@@ -15,7 +16,7 @@ public partial class IntroPage : ContentPage
         StartBlinkingAnimation();
 
         // โหลดรูปผู้หญิงรอไว้หลังม่าน
-        BackgroundImage.Source = "select_char_female.png";
+        BackgroundImage.Source = "story/ui/ui_select_char_female.png";
     }
 
     private void StartBlinkingAnimation()
@@ -66,7 +67,9 @@ public partial class IntroPage : ContentPage
         await FadeOverlay.FadeTo(1, 300, Easing.CubicIn);
 
         _selected = newGender;
-        BackgroundImage.Source = (_selected == Gender.Male) ? "select_char_male.png" : "select_char_female.png";
+        BackgroundImage.Source = (_selected == Gender.Male)
+            ? "story/ui/ui_select_char_male.png"
+            : "story/ui/ui_select_char_female.png";
 
         await Task.Delay(100);
         await FadeOverlay.FadeTo(0, 300, Easing.CubicOut);
@@ -75,31 +78,66 @@ public partial class IntroPage : ContentPage
 
     private async void OnStartClicked(object sender, EventArgs e)
     {
+        var startButton = sender as Button;
+        if (startButton != null) startButton.IsEnabled = false;
+
         var name = NameEntry.Text?.Trim();
         if (string.IsNullOrWhiteSpace(name))
         {
-            await DisplayAlert("Name required", "Please enter a survivor name.", "OK");
+            await DisplayAlert("ต้องใส่ชื่อ", "กรุณาใส่ชื่อผู้รอดชีวิต", "ตกลง");
+            if (startButton != null) startButton.IsEnabled = true;
             return;
         }
 
-        // 1. สร้างข้อมูลตัวละครใหม่และดึงค่าเพศ _selected
-        var survivor = new Survivor { Name = name, Gender = _selected };
-
-        // 2. สร้างสถานะเกมเริ่มต้น
-        var state = new GameState
+        try
         {
-            Difficulty = Difficulty.Normal,
-            Status = GameStatus.Running,
-            DayCount = 1,
-            GameMinute = 8 * 60 // 08:00 AM
-        };
-        var inv = new Inventory();
+            // 1. สร้างข้อมูลตัวละครใหม่และดึงค่าเพศ _selected
+            var survivor = new Survivor { Name = name, Gender = _selected };
+            var contentGenerator = new LlmGameContentService();
+            var generatedContent = await contentGenerator.GenerateNewGameAsync(survivor);
 
-        // 🚨 3. แก้ตรงนี้! เปลี่ยนจาก SaveService มาใช้ GameDatabase 🚨
-        var db = new TheEndOfMine.Data.GameDatabase();
-        await db.SaveAsync(survivor, state, inv);
+            var inv = new Inventory();
+            foreach (var item in generatedContent.StartingItems)
+                inv.AddItem(item);
 
-        // 4. ไปหน้าเลือกความยาก
-        await Navigation.PushAsync(new DifficultyPage());
+            survivor.Inventory = inv;
+
+            // 2. สร้างสถานะเกมเริ่มต้นพร้อม story ที่ generate แล้ว
+            var state = new GameState
+            {
+                Survivor = survivor,
+                Difficulty = Difficulty.Normal,
+                Status = GameStatus.Running,
+                DayCount = 1,
+                GameMinute = 8 * 60, // 08:00 AM
+                EventIndex = 0,
+                StoryTitle = generatedContent.StoryTitle,
+                CurrentChapterTitle = generatedContent.StoryTitle,
+                CurrentChapter = 1,
+                MaxChapters = 4,
+                EventsPerChapter = 8,
+                StorySource = generatedContent.UsedRemoteLlm ? "llm" : "local_fallback",
+                GeneratedEvents = generatedContent.Events
+            };
+
+            // 3. บันทึกข้อมูลรอบใหม่ลง GameDatabase
+            var db = new TheEndOfMine.Data.GameDatabase();
+            await db.SaveAsync(survivor, state, inv);
+
+            if (!generatedContent.UsedRemoteLlm)
+            {
+                await DisplayAlert(
+                    "ยังไม่ได้ตั้งค่า GPT",
+                    "ยังไม่พบ OPENAI_API_KEY หรือ LLM_API_KEY ระบบจึงสร้างเนื้อเรื่อง fallback แบบสุ่มให้ก่อน",
+                    "ตกลง");
+            }
+
+            // 4. ไปหน้าเลือกความยาก
+            await Navigation.PushAsync(new DifficultyPage());
+        }
+        finally
+        {
+            if (startButton != null) startButton.IsEnabled = true;
+        }
     }
 }

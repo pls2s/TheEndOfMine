@@ -53,6 +53,11 @@ Thumbs.db
 *.keystore
 !**/Resources/**
 
+# Local LLM secrets
+TheEndOfMine/Resources/Raw/llm_config.local.json
+TheEndOfMine/Resources/Raw/llm.env
+tmp/
+
 # iOS
 *.ipa
 *.dSYM.zip

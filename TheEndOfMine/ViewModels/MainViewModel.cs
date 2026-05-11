@@ -77,6 +77,9 @@ public class MainViewModel : INotifyPropertyChanged
 
         if (survivor != null && state != null)
         {
+            if (inventory != null)
+                survivor.Inventory = inventory;
+
             // ถ้าเจอเซฟผู้หญิง ก็จับคู่ข้อมูลให้ GameState เอาไปใช้ต่อ
             state.Survivor = survivor;
             _currentState = state;
@@ -93,7 +96,7 @@ public class MainViewModel : INotifyPropertyChanged
         _engine.OnEventTriggered += (ev) => OnEventOccurred(ev);
 
         // เริ่มเกมด้วยข้อมูลที่โหลดมาถูกต้อง 100%
-        _engine.StartGame(_currentState!.Survivor, _currentState.Difficulty);
+        _engine.StartGame(_currentState!);
         UpdateFromState(_currentState);
     }
 

@@ -9,6 +9,7 @@ public class GameEngine
     private readonly EventService _eventService;
     private readonly DifficultyService _difficultyService;
     private readonly SaveService _saveService;
+    private readonly LlmGameContentService _llmContentService;
 
     private readonly System.Timers.Timer _gameTimer;
 
@@ -26,11 +27,16 @@ public class GameEngine
     public event Action? OnGameOver;
     public event Action? OnCheckpointLoaded;
 
-    public GameEngine(EventService eventService, DifficultyService difficultyService, SaveService saveService)
+    public GameEngine(
+        EventService eventService,
+        DifficultyService difficultyService,
+        SaveService saveService,
+        LlmGameContentService? llmContentService = null)
     {
         _eventService = eventService;
         _difficultyService = difficultyService;
         _saveService = saveService;
+        _llmContentService = llmContentService ?? new LlmGameContentService();
 
         _gameTimer = new System.Timers.Timer(TickIntervalMs);
         _gameTimer.Elapsed += OnTimerTick;
@@ -41,15 +47,20 @@ public class GameEngine
 
     public void StartGame(Survivor survivor, Difficulty difficulty)
     {
-        CurrentState = new GameState
+        StartGame(new GameState
         {
             Survivor = survivor,
             Difficulty = difficulty,
             Status = GameStatus.Running,
             DayCount = 1,
             GameMinute = 0
-        };
+        });
+    }
 
+    public void StartGame(GameState state)
+    {
+        CurrentState = state;
+        CurrentState.Status = GameStatus.Running;
         _saveService.SaveCheckpoint(CurrentState);
         _gameTimer.Start();
         NotifyStateChanged();
@@ -78,7 +89,12 @@ public class GameEngine
 
         ApplyStatChange(fatigueDelta: 5f);
 
-        var gameEvent = await _eventService.GetNextEventAsync(CurrentState.EventIndex);
+        var gameEvent = await _eventService.GetNextEventAsync(CurrentState.EventIndex, CurrentState.GeneratedEvents);
+        if (gameEvent == null && CurrentState.GeneratedEvents.Count > 0)
+        {
+            gameEvent = await AdvanceChapterAsync();
+        }
+
         if (gameEvent != null)
         {
             // เดิน index ไปข้างหน้าก่อน invoke เพื่อไม่ให้ซ้ำถ้า save ระหว่าง event
@@ -87,6 +103,32 @@ public class GameEngine
         }
 
         NotifyStateChanged();
+    }
+
+    private async Task<GameEvent?> AdvanceChapterAsync()
+    {
+        if (CurrentState == null) return null;
+
+        if (CurrentState.CurrentChapter >= CurrentState.MaxChapters)
+        {
+            _gameTimer.Stop();
+            CurrentState.Status = GameStatus.GameOver;
+            MainThread.BeginInvokeOnMainThread(() => OnGameOver?.Invoke());
+            return null;
+        }
+
+        if (!string.IsNullOrWhiteSpace(CurrentState.CurrentChapterTitle))
+            CurrentState.CompletedChapterTitles.Add(CurrentState.CurrentChapterTitle);
+
+        var nextChapter = await _llmContentService.GenerateNextChapterAsync(CurrentState);
+        CurrentState.CurrentChapter++;
+        CurrentState.CurrentChapterTitle = nextChapter.StoryTitle;
+        CurrentState.GeneratedEvents = nextChapter.Events;
+        CurrentState.EventIndex = 0;
+        CurrentState.StorySource = nextChapter.UsedRemoteLlm ? "llm" : "local_fallback";
+
+        _saveService.SaveCheckpoint(CurrentState);
+        return await _eventService.GetNextEventAsync(CurrentState.EventIndex, CurrentState.GeneratedEvents);
     }
 
     // พักผ่อน → ลด Fatigue เล็กน้อย
