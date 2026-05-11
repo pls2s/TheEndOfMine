@@ -13,6 +13,8 @@ public class GameState
     public string StoryTitle { get; set; } = string.Empty;
     public string StorySource { get; set; } = string.Empty;
     public string CurrentChapterTitle { get; set; } = string.Empty;
+    public string CurrentChapterAlias { get; set; } = string.Empty;
+    public string CurrentChapterImagePath { get; set; } = string.Empty;
     public int CurrentChapter { get; set; } = 1;
     public int MaxChapters { get; set; } = 4;
     public int EventsPerChapter { get; set; } = 8;

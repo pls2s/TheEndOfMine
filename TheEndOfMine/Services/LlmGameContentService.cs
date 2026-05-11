@@ -48,10 +48,14 @@ public class LlmGameContentService
     };
 
     private readonly ImageGenerationService _imageGenerationService;
+    private readonly StoryAssetResolver _storyAssetResolver;
 
-    public LlmGameContentService(ImageGenerationService? imageGenerationService = null)
+    public LlmGameContentService(
+        ImageGenerationService? imageGenerationService = null,
+        StoryAssetResolver? storyAssetResolver = null)
     {
         _imageGenerationService = imageGenerationService ?? new ImageGenerationService();
+        _storyAssetResolver = storyAssetResolver ?? new StoryAssetResolver();
     }
 
     public async Task<GeneratedGameContent> GenerateNewGameAsync(Survivor survivor, CancellationToken cancellationToken = default)
@@ -75,13 +79,14 @@ public class LlmGameContentService
         GameState? state,
         CancellationToken cancellationToken)
     {
+        var assetCatalog = await _storyAssetResolver.LoadCatalogAsync(cancellationToken).ConfigureAwait(false);
         var settings = await LoadSettingsAsync(cancellationToken).ConfigureAwait(false);
         if (string.IsNullOrWhiteSpace(settings.ApiKey))
-            return CreateFallbackContent(survivor, chapterNumber, eventsPerChapter);
+            return CreateFallbackContent(survivor, chapterNumber, eventsPerChapter, assetCatalog);
 
         try
         {
-            var prompt = BuildPrompt(survivor, chapterNumber, maxChapters, eventsPerChapter, state);
+            var prompt = BuildPrompt(survivor, chapterNumber, maxChapters, eventsPerChapter, state, assetCatalog);
             var requestJson = JsonSerializer.Serialize(CreateLlmRequest(settings, prompt), JsonOptions);
 
             using var request = new HttpRequestMessage(HttpMethod.Post, settings.Endpoint);
@@ -98,7 +103,7 @@ public class LlmGameContentService
             if (generated == null)
                 throw new InvalidOperationException("LLM response was empty.");
 
-            NormalizeContent(generated, survivor.Name, eventsPerChapter);
+            NormalizeContent(generated, survivor, eventsPerChapter, assetCatalog);
             await _imageGenerationService.GenerateChapterImagesAsync(
                 state ?? CreateImageState(survivor, chapterNumber, maxChapters, eventsPerChapter),
                 generated,
@@ -109,7 +114,7 @@ public class LlmGameContentService
         }
         catch
         {
-            return CreateFallbackContent(survivor, chapterNumber, eventsPerChapter);
+            return CreateFallbackContent(survivor, chapterNumber, eventsPerChapter, assetCatalog);
         }
     }
 
@@ -185,7 +190,13 @@ public class LlmGameContentService
         };
     }
 
-    private static string BuildPrompt(Survivor survivor, int chapterNumber, int maxChapters, int eventsPerChapter, GameState? state)
+    private string BuildPrompt(
+        Survivor survivor,
+        int chapterNumber,
+        int maxChapters,
+        int eventsPerChapter,
+        GameState? state,
+        StoryAssetCatalog assetCatalog)
     {
         var phase = chapterNumber switch
         {
@@ -204,6 +215,7 @@ public class LlmGameContentService
         var endingRule = chapterNumber >= maxChapters
             ? "- chapter นี้เป็นบทสุดท้าย event ที่ 8 ต้องเป็นเหตุการณ์ปลายทางที่นำไปสู่ฉากจบ"
             : "- event ที่ 8 ต้องเปิดทางไป chapter ถัดไป แต่ยังไม่จบเกม";
+        var assetAliasRules = _storyAssetResolver.FormatPromptAliases(assetCatalog);
 
         return $$"""
         สร้างเนื้อเรื่อง chapter สำหรับเกม The End of Mine
@@ -213,14 +225,19 @@ public class LlmGameContentService
         ธีมของ chapter นี้: {{phase}}
         สถานะเกมปัจจุบัน: {{currentStatus}}
 
+        {{assetAliasRules}}
+
         ข้อกำหนด:
         - ใช้ภาษาไทยสำหรับ storyTitle, title, description, choice text, resultText, ชื่อไอเทม และคำอธิบายไอเทม
         - storyTitle ให้เป็นชื่อ chapter นี้
+        - chapter_alias ต้องเลือกจากรายการ chapter_alias ด้านบนให้เข้ากับบรรยากาศ chapter
         - สร้าง event ให้ครบ {{eventsPerChapter}} เหตุการณ์
+        - ทุก event ต้องมี story_alias ที่เลือกจากรายการ event.story_alias ด้านบน และต้องสัมพันธ์กับสถานการณ์ใน event
         - แต่ละ event ต้องมี choice 2 ตัวเลือกพอดี
         - แต่ละ choice ต้องมี id, text, hpEffect, hungerEffect, thirstEffect, fatigueEffect, resultText
         - ค่าผลกระทบตัวเลขต้องสมดุล และอยู่ระหว่าง -30 ถึง 30
         - ใส่ itemReward ให้ choice จำนวน 4 จุดพอดี โดย itemReward ต้องเป็น item object ครบถ้วน
+        - ทุก itemReward และ startingItems ต้องมี story_alias ที่เลือกจากรายการ item.story_alias ด้านบน
         - choice อื่นที่ไม่ได้ให้ไอเทมห้ามใส่ key itemReward
         - ทุก event ต้องมี imagePrompt เป็นภาษาอังกฤษ สำหรับสร้างภาพประกอบแบบ realistic gritty survival game art, no text, no UI, no logo
         - ทุก item ใน startingItems และ itemReward ต้องมี image_prompt เป็นภาษาอังกฤษ สำหรับสร้างภาพไอเทมเดี่ยวบนพื้นหลังเรียบ, no text, no logo
@@ -231,11 +248,13 @@ public class LlmGameContentService
         ตอบ JSON ตามรูปแบบนี้เท่านั้น:
         {
           "storyTitle": "string",
+          "chapter_alias": "alias_from_chapter_list",
           "events": [
             {
               "id": "evt_01",
               "title": "string",
               "description": "string",
+              "story_alias": "alias_from_event_list",
               "imagePrompt": "English image prompt",
               "choices": [
                 {
@@ -267,7 +286,7 @@ public class LlmGameContentService
                     },
                     "description_th": "string",
                     "image_prompt": "English item image prompt",
-                    "story_alias": "gen_alias"
+                    "story_alias": "alias_from_item_list"
                   }
                 }
               ]
@@ -346,10 +365,20 @@ public class LlmGameContentService
         return trimmed;
     }
 
-    private static void NormalizeContent(GeneratedGameContent content, string survivorName, int eventsPerChapter)
+    private void NormalizeContent(
+        GeneratedGameContent content,
+        Survivor survivor,
+        int eventsPerChapter,
+        StoryAssetCatalog assetCatalog)
     {
         if (string.IsNullOrWhiteSpace(content.StoryTitle))
-            content.StoryTitle = $"เส้นทางของ {survivorName}";
+            content.StoryTitle = $"เส้นทางของ {survivor.Name}";
+
+        content.ChapterAlias = _storyAssetResolver.NormalizeAlias(
+            content.ChapterAlias,
+            assetCatalog.ChapterAliases,
+            content.StoryTitle);
+        content.ChapterImagePath = _storyAssetResolver.ResolveChapterPath(survivor.Gender, content.ChapterAlias, assetCatalog);
 
         content.Events = content.Events
             .Where(e => !string.IsNullOrWhiteSpace(e.Title) && e.Choices.Count >= 2)
@@ -364,6 +393,11 @@ public class LlmGameContentService
         {
             var gameEvent = content.Events[i];
             gameEvent.Id = string.IsNullOrWhiteSpace(gameEvent.Id) ? $"evt_{i + 1:D2}" : gameEvent.Id;
+            gameEvent.StoryAlias = _storyAssetResolver.NormalizeAlias(
+                gameEvent.StoryAlias ?? gameEvent.ImageAlias,
+                assetCatalog.EventAliases,
+                gameEvent.Title);
+            gameEvent.ImagePath = _storyAssetResolver.ResolveEventPath(survivor.Gender, gameEvent.StoryAlias, assetCatalog);
             gameEvent.Description = string.IsNullOrWhiteSpace(gameEvent.Description)
                 ? "สถานการณ์ตรงหน้าบีบให้คุณต้องตัดสินใจทันที"
                 : gameEvent.Description;
@@ -386,7 +420,7 @@ public class LlmGameContentService
 
                 if (choice.ItemReward != null)
                 {
-                    NormalizeItem(choice.ItemReward, $"reward_{i + 1}_{c + 1}");
+                    NormalizeItem(choice.ItemReward, $"reward_{i + 1}_{c + 1}", assetCatalog);
                     rewardCount++;
                     if (rewardCount > 5)
                         choice.ItemReward = null;
@@ -396,12 +430,12 @@ public class LlmGameContentService
 
         content.StartingItems = content.StartingItems.Take(3).ToList();
         for (var i = 0; i < content.StartingItems.Count; i++)
-            NormalizeItem(content.StartingItems[i], $"start_{i + 1}");
+            NormalizeItem(content.StartingItems[i], $"start_{i + 1}", assetCatalog);
     }
 
     private static float ClampEffect(float value) => Math.Clamp(value, -30f, 30f);
 
-    private static void NormalizeItem(Item item, string fallbackId)
+    private void NormalizeItem(Item item, string fallbackId, StoryAssetCatalog assetCatalog)
     {
         item.Id = string.IsNullOrWhiteSpace(item.Id) ? $"gen_{fallbackId}" : item.Id;
         item.NameTh = string.IsNullOrWhiteSpace(item.NameTh) ? "ของใช้ไม่ทราบที่มา" : item.NameTh;
@@ -421,10 +455,18 @@ public class LlmGameContentService
         item.ImagePrompt = string.IsNullOrWhiteSpace(item.ImagePrompt)
             ? $"Single survival item, {item.NameEn}, realistic game inventory icon, plain dark background, no text, no logo"
             : item.ImagePrompt;
-        item.StoryAlias ??= item.Id;
+        item.StoryAlias = _storyAssetResolver.NormalizeAlias(
+            item.StoryAlias,
+            assetCatalog.ItemAliases,
+            $"{item.NameEn} {item.NameTh} {item.Id}");
+        item.ImagePath = _storyAssetResolver.ResolveItemPath(item.StoryAlias, assetCatalog);
     }
 
-    private static GeneratedGameContent CreateFallbackContent(Survivor survivor, int chapterNumber = 1, int eventsPerChapter = 8)
+    private GeneratedGameContent CreateFallbackContent(
+        Survivor survivor,
+        int chapterNumber,
+        int eventsPerChapter,
+        StoryAssetCatalog assetCatalog)
     {
         var seed = Guid.NewGuid().ToString("N")[..8];
         var places = new[] { "โรงพยาบาลร้าง", "สถานีรถไฟใต้ดิน", "ตลาดกลางคืนที่ถูกทิ้ง", "ดาดฟ้าอพาร์ตเมนต์", "อุโมงค์ระบายน้ำ" };
@@ -468,7 +510,7 @@ public class LlmGameContentService
             });
         }
 
-        return new GeneratedGameContent
+        var content = new GeneratedGameContent
         {
             StoryTitle = $"บทที่ {chapterNumber}: คืนเอาตัวรอด {seed}",
             UsedRemoteLlm = false,
@@ -480,6 +522,10 @@ public class LlmGameContentService
                 CreateFallbackItem("ผ้าพันแผลสะอาด", $"start_{seed}_bandage")
             } : new List<Item>()
         };
+
+        NormalizeContent(content, survivor, eventsPerChapter, assetCatalog);
+        content.UsedRemoteLlm = false;
+        return content;
     }
 
     private static Item CreateFallbackItem(string nameTh, string id)

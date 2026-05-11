@@ -123,6 +123,8 @@ public class GameEngine
         var nextChapter = await _llmContentService.GenerateNextChapterAsync(CurrentState);
         CurrentState.CurrentChapter++;
         CurrentState.CurrentChapterTitle = nextChapter.StoryTitle;
+        CurrentState.CurrentChapterAlias = nextChapter.ChapterAlias ?? string.Empty;
+        CurrentState.CurrentChapterImagePath = nextChapter.ChapterImagePath;
         CurrentState.GeneratedEvents = nextChapter.Events;
         CurrentState.EventIndex = 0;
         CurrentState.StorySource = nextChapter.UsedRemoteLlm ? "llm" : "local_fallback";
@@ -170,6 +172,7 @@ public class GameEngine
         if (choice.ItemReward != null)
             CurrentState.Survivor.Inventory.AddItem(choice.ItemReward);
 
+        _saveService.SaveCheckpoint(CurrentState);
         CheckDeath();
         NotifyStateChanged();
     }

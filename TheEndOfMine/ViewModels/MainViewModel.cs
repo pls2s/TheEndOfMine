@@ -7,7 +7,7 @@ using Microsoft.Maui.Controls;
 using TheEndOfMine.Models;
 using TheEndOfMine.Services;
 using TheEndOfMine.Data;
-using System.Collections.Generic;
+using TheEndOfMine.Views;
 
 namespace TheEndOfMine.ViewModels;
 
@@ -105,28 +105,33 @@ public class MainViewModel : INotifyPropertyChanged
 
     private void OnEventOccurred(GameEvent ev)
     {
-        // show choices as action sheet
         MainThread.BeginInvokeOnMainThread(async () =>
         {
             try
             {
-                var page = Application.Current?.MainPage;
-                if (page == null) return;
+                var navigation = Shell.Current?.Navigation
+                    ?? Application.Current?.Windows.FirstOrDefault()?.Page?.Navigation;
+                if (navigation == null) return;
 
-                var options = new List<string>();
-                foreach (var c in ev.Choices) options.Add(c.Text);
+                var chapterLabel = _currentState == null
+                    ? "THE END OF MINE"
+                    : $"CHAPTER {_currentState.CurrentChapter}: {_currentState.CurrentChapterTitle}";
 
-                var choice = await page.DisplayActionSheet(ev.Title, "Cancel", null, options.ToArray());
-                if (choice == null || choice == "Cancel") return;
-
-                var selected = ev.Choices.Find(x => x.Text == choice);
-                if (selected != null)
+                await navigation.PushModalAsync(new EventPopup(ev, chapterLabel, choice =>
                 {
-                    _engine?.ApplyEventChoice(selected);
-                }
+                    _engine?.ApplyEventChoice(choice);
+                    if (_engine?.CurrentState != null)
+                        _ = SaveGameDatabaseAsync(_engine.CurrentState);
+                }));
             }
             catch { }
         });
+    }
+
+    private static async Task SaveGameDatabaseAsync(GameState state)
+    {
+        var db = new GameDatabase();
+        await db.SaveAsync(state.Survivor, state, state.Survivor.Inventory);
     }
 
     private void OnMessageIssued(string msg) { }

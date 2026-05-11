@@ -3,6 +3,7 @@
 using TheEndOfMine.ViewModels;
 using TheEndOfMine.Data;
 using TheEndOfMine.Models;
+using TheEndOfMine.Views;
 
 public partial class MainPage : ContentPage
 {
@@ -106,6 +107,11 @@ public partial class MainPage : ContentPage
             Btn4H.BackgroundColor = Color.FromArgb("#88000000");
             Btn4H.TextColor = Colors.White;
         }
+    }
+
+    private async void OnInventoryClicked(object sender, EventArgs e)
+    {
+        await Navigation.PushAsync(new InventoryPage());
     }
 
     private void ConfirmRest(int hours)

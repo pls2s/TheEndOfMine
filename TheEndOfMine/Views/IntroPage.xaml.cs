@@ -111,6 +111,8 @@ public partial class IntroPage : ContentPage
                 EventIndex = 0,
                 StoryTitle = generatedContent.StoryTitle,
                 CurrentChapterTitle = generatedContent.StoryTitle,
+                CurrentChapterAlias = generatedContent.ChapterAlias ?? string.Empty,
+                CurrentChapterImagePath = generatedContent.ChapterImagePath,
                 CurrentChapter = 1,
                 MaxChapters = 4,
                 EventsPerChapter = 8,

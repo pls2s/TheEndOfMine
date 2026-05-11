@@ -34,7 +34,7 @@ public class ImageGenerationService
 
         foreach (var gameEvent in content.Events)
         {
-            if (!string.IsNullOrWhiteSpace(gameEvent.ImagePrompt))
+            if (string.IsNullOrWhiteSpace(gameEvent.ImagePath) && !string.IsNullOrWhiteSpace(gameEvent.ImagePrompt))
             {
                 imageJobs.Add(async () =>
                 {
@@ -64,7 +64,7 @@ public class ImageGenerationService
         int chapter,
         CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(item.ImagePrompt))
+        if (!string.IsNullOrWhiteSpace(item.ImagePath) || string.IsNullOrWhiteSpace(item.ImagePrompt))
             return;
 
         imageJobs.Add(async () =>
