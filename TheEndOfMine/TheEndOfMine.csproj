@@ -68,7 +68,4 @@
 	  <Folder Include="Data/" />
 	</ItemGroup>
 
-	<ItemGroup>
-	</ItemGroup>
-
 </Project>

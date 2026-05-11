@@ -16,7 +16,7 @@ public partial class IntroPage : ContentPage
         StartBlinkingAnimation();
 
         // โหลดรูปผู้หญิงรอไว้หลังม่าน
-        BackgroundImage.Source = "story/ui/ui_select_char_female.png";
+        BackgroundImage.Source = GetCharacterImagePath(_selected, "select");
     }
 
     private void StartBlinkingAnimation()
@@ -67,9 +67,7 @@ public partial class IntroPage : ContentPage
         await FadeOverlay.FadeTo(1, 300, Easing.CubicIn);
 
         _selected = newGender;
-        BackgroundImage.Source = (_selected == Gender.Male)
-            ? "story/ui/ui_select_char_male.png"
-            : "story/ui/ui_select_char_female.png";
+        BackgroundImage.Source = GetCharacterImagePath(_selected, "select");
 
         await Task.Delay(100);
         await FadeOverlay.FadeTo(0, 300, Easing.CubicOut);
@@ -139,5 +137,20 @@ public partial class IntroPage : ContentPage
         {
             if (startButton != null) startButton.IsEnabled = true;
         }
+    }
+
+    private static string GetCharacterImagePath(Gender gender, string kind)
+    {
+        var folder = gender == Gender.Male ? "story/male" : "story/female";
+        var prefix = gender == Gender.Male ? "male" : "female";
+
+        return kind switch
+        {
+            "select" => $"{folder}/{prefix}_select_char.png",
+            "loading" => $"{folder}/{prefix}_loading_screen_portrait.png",
+            "difficulty" => $"{folder}/{prefix}_difficulty_select.png",
+            "confirm" => $"{folder}/{prefix}_confirm_button.png",
+            _ => $"{folder}/{prefix}_select_char.png"
+        };
     }
 }
