@@ -8,8 +8,33 @@ namespace TheEndOfMine.Services;
 
 public class LlmGameContentService
 {
-    private const string DefaultEndpoint = "https://api.openai.com/v1/chat/completions";
-    private const string DefaultModel = "gpt-4o-mini";
+    private const string ProviderOpenAi = "openai";
+    private const string ProviderTyphoon = "typhoon";
+    private const string DefaultProvider = ProviderTyphoon;
+    private const string OpenAiEndpoint = "https://api.openai.com/v1/responses";
+    private const string OpenAiModel = "gpt-5.4-mini";
+    private const string TyphoonEndpoint = "https://api.opentyphoon.ai/v1/chat/completions";
+    private const string TyphoonModel = "typhoon-v2.5-30b-a3b-instruct";
+    private const string SystemPrompt = """
+    คุณคือระบบสร้างเนื้อเรื่องของเกม The End of Mine เกมเอาตัวรอดหลังหายนะที่แสดงผลเป็นภาษาไทย
+
+    หน้าที่ของคุณคือสร้างหนึ่งรอบการเล่นใหม่ที่เล่นได้จริง ไม่ใช่เขียนเรื่องสั้นให้อ่านอย่างเดียว
+
+    กฎสำคัญ:
+    - ตอบกลับเป็น JSON object ที่ถูกต้องเพียงก้อนเดียวเท่านั้น
+    - ห้ามครอบ JSON ด้วย markdown
+    - ห้ามใส่คำอธิบาย คอมเมนต์ หรือ key นอก schema ที่กำหนด
+    - ข้อความทุกอย่างที่ผู้เล่นเห็นต้องเป็นภาษาไทยธรรมชาติ
+    - โทนเรื่องต้องกดดัน สมจริง เน้นการเอาตัวรอด และมีทางเลือกที่ลำบากทางศีลธรรม
+    - หลีกเลี่ยงแฟนตาซี เวทมนตร์ มุกตลก ซูเปอร์ฮีโร่ และฉากแอ็กชันทหารเกินจริง
+    - ทุก event ต้องเป็นสถานการณ์ที่ผู้เล่นตัดสินใจได้ทันทีในเกม
+    - ทุก choice ต้องมี tradeoff ที่มีความหมาย
+    - ผลกระทบต่อทรัพยากรต้องสมดุล ห้ามทำให้ตัวเลือกหนึ่งดีกว่าอีกตัวเลือกแบบชัดเจนเสมอ
+    - ไอเทมต้องเป็นของใช้เอาตัวรอดที่เข้ากับบริบทของเหตุการณ์
+    - id ของไอเทมที่สร้างต้องเป็น lowercase snake_case และขึ้นต้นด้วย gen_
+
+    game engine จะ deserialize คำตอบของคุณทันที ถ้า JSON ผิดหรือ field ไม่ครบ คำตอบจะถูกปฏิเสธ
+    """;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -24,17 +49,35 @@ public class LlmGameContentService
 
     public async Task<GeneratedGameContent> GenerateNewGameAsync(Survivor survivor, CancellationToken cancellationToken = default)
     {
+        return await GenerateChapterContentAsync(survivor, chapterNumber: 1, maxChapters: 4, eventsPerChapter: 8, state: null, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    public async Task<GeneratedGameContent> GenerateNextChapterAsync(GameState state, CancellationToken cancellationToken = default)
+    {
+        var nextChapter = Math.Clamp(state.CurrentChapter + 1, 1, state.MaxChapters);
+        return await GenerateChapterContentAsync(state.Survivor, nextChapter, state.MaxChapters, state.EventsPerChapter, state, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    private async Task<GeneratedGameContent> GenerateChapterContentAsync(
+        Survivor survivor,
+        int chapterNumber,
+        int maxChapters,
+        int eventsPerChapter,
+        GameState? state,
+        CancellationToken cancellationToken)
+    {
         var settings = await LoadSettingsAsync(cancellationToken).ConfigureAwait(false);
         if (string.IsNullOrWhiteSpace(settings.ApiKey))
-            return CreateFallbackContent(survivor);
+            return CreateFallbackContent(survivor, chapterNumber, eventsPerChapter);
 
         try
         {
-            var endpoint = settings.Endpoint ?? DefaultEndpoint;
-            var model = settings.Model ?? DefaultModel;
-            var requestJson = JsonSerializer.Serialize(CreateChatRequest(model, survivor), JsonOptions);
+            var prompt = BuildPrompt(survivor, chapterNumber, maxChapters, eventsPerChapter, state);
+            var requestJson = JsonSerializer.Serialize(CreateLlmRequest(settings, prompt), JsonOptions);
 
-            using var request = new HttpRequestMessage(HttpMethod.Post, endpoint);
+            using var request = new HttpRequestMessage(HttpMethod.Post, settings.Endpoint);
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", settings.ApiKey);
             request.Content = new StringContent(requestJson, Encoding.UTF8, "application/json");
 
@@ -48,57 +91,119 @@ public class LlmGameContentService
             if (generated == null)
                 throw new InvalidOperationException("LLM response was empty.");
 
-            NormalizeContent(generated, survivor.Name);
+            NormalizeContent(generated, survivor.Name, eventsPerChapter);
             generated.UsedRemoteLlm = true;
             return generated;
         }
         catch
         {
-            return CreateFallbackContent(survivor);
+            return CreateFallbackContent(survivor, chapterNumber, eventsPerChapter);
         }
     }
 
-    private static object CreateChatRequest(string model, Survivor survivor)
+    private static object CreateLlmRequest(LlmRuntimeSettings settings, string prompt)
+    {
+        return settings.Provider == ProviderOpenAi
+            ? CreateOpenAiResponsesRequest(settings.Model, prompt)
+            : CreateChatCompletionsRequest(settings.Model, prompt);
+    }
+
+    private static object CreateOpenAiResponsesRequest(string model, string prompt)
     {
         return new
         {
             model,
-            temperature = 0.95,
-            response_format = new { type = "json_object" },
-            messages = new[]
+            input = new[]
             {
                 new
                 {
                     role = "system",
-                    content = "You generate balanced Thai JSON content for a post-apocalyptic survival game. Return JSON only."
+                    content = SystemPrompt
                 },
                 new
                 {
                     role = "user",
-                    content = BuildPrompt(survivor)
+                    content = prompt
+                }
+            },
+            text = new
+            {
+                format = new
+                {
+                    type = "json_object"
                 }
             }
         };
     }
 
-    private static string BuildPrompt(Survivor survivor)
+    private static object CreateChatCompletionsRequest(string model, string prompt)
     {
+        return new
+        {
+            model,
+            messages = new[]
+            {
+                new
+                {
+                    role = "system",
+                    content = SystemPrompt
+                },
+                new
+                {
+                    role = "user",
+                    content = prompt
+                }
+            },
+            max_tokens = 8192,
+            temperature = 0.7,
+            top_p = 0.95,
+            repetition_penalty = 1.05,
+            stream = false
+        };
+    }
+
+    private static string BuildPrompt(Survivor survivor, int chapterNumber, int maxChapters, int eventsPerChapter, GameState? state)
+    {
+        var phase = chapterNumber switch
+        {
+            1 => "ตื่นรอด / ตั้งหลัก",
+            2 => "ออกหาเสบียง / เจอภัยจริง",
+            3 => "เป้าหมายหลัก / ซ่อมวิทยุหรือหาทางหนี",
+            4 => "ทางเลือกสุดท้าย / ไป safe zone หรือจบแบบอื่น",
+            _ => "เอาตัวรอดต่อเนื่อง"
+        };
+        var currentStatus = state == null
+            ? "เริ่มเกมใหม่ ยังไม่มีประวัติการเล่น"
+            : BuildStateSummary(state);
+        var startingItemsRule = chapterNumber == 1
+            ? "- สร้าง startingItems 3 ชิ้น"
+            : "- startingItems ต้องเป็น array ว่าง [] เพราะไม่ใช่ chapter แรก";
+        var endingRule = chapterNumber >= maxChapters
+            ? "- chapter นี้เป็นบทสุดท้าย event ที่ 8 ต้องเป็นเหตุการณ์ปลายทางที่นำไปสู่ฉากจบ"
+            : "- event ที่ 8 ต้องเปิดทางไป chapter ถัดไป แต่ยังไม่จบเกม";
+
         return $$"""
-        Generate a new game story for The End of Mine.
-        Survivor name: {{survivor.Name}}
-        Survivor gender: {{survivor.Gender}}
+        สร้างเนื้อเรื่อง chapter สำหรับเกม The End of Mine
+        ชื่อตัวละคร: {{survivor.Name}}
+        เพศตัวละคร: {{survivor.Gender}}
+        Chapter: {{chapterNumber}}/{{maxChapters}}
+        ธีมของ chapter นี้: {{phase}}
+        สถานะเกมปัจจุบัน: {{currentStatus}}
 
-        Requirements:
-        - Thai language for storyTitle, title, description, choice text, resultText, item names, and item descriptions.
-        - Create exactly 8 events.
-        - Each event must have exactly 2 choices.
-        - Each choice must include id, text, hpEffect, hungerEffect, thirstEffect, fatigueEffect, resultText.
-        - Numeric effects must be balanced between -30 and 30.
-        - Add itemReward to 3-5 choices. Rewards must be full item objects.
-        - Create 3 startingItems.
-        - Keep the tone tense, survival-focused, and varied.
+        ข้อกำหนด:
+        - ใช้ภาษาไทยสำหรับ storyTitle, title, description, choice text, resultText, ชื่อไอเทม และคำอธิบายไอเทม
+        - storyTitle ให้เป็นชื่อ chapter นี้
+        - สร้าง event ให้ครบ {{eventsPerChapter}} เหตุการณ์
+        - แต่ละ event ต้องมี choice 2 ตัวเลือกพอดี
+        - แต่ละ choice ต้องมี id, text, hpEffect, hungerEffect, thirstEffect, fatigueEffect, resultText
+        - ค่าผลกระทบตัวเลขต้องสมดุล และอยู่ระหว่าง -30 ถึง 30
+        - ใส่ itemReward ให้ choice จำนวน 4 จุดพอดี โดย itemReward ต้องเป็น item object ครบถ้วน
+        - choice อื่นที่ไม่ได้ให้ไอเทมห้ามใส่ key itemReward
+        {{startingItemsRule}}
+        {{endingRule}}
+        - โทนต้องกดดัน เน้นการเอาตัวรอด และแต่ละเหตุการณ์ต้องไม่ซ้ำอารมณ์กัน
 
-        Return JSON with this exact shape:
+        ตอบ JSON ตามรูปแบบนี้เท่านั้น:
         {
           "storyTitle": "string",
           "events": [
@@ -146,10 +251,41 @@ public class LlmGameContentService
         """;
     }
 
+    private static string BuildStateSummary(GameState state)
+    {
+        var s = state.Survivor;
+        var items = s.Inventory.GetItems()
+            .Take(8)
+            .Select(i => string.IsNullOrWhiteSpace(i.NameTh) ? i.Id : i.NameTh);
+
+        return $"HP {s.HP:0}, Hunger {s.Hunger:0}, Thirst {s.Thirst:0}, Fatigue {s.Fatigue:0}, " +
+               $"วันที่ {state.DayCount}, เวลา {state.Hour:D2}:{state.Minute:D2}, " +
+               $"chapter ที่จบแล้ว: {string.Join(", ", state.CompletedChapterTitles)}, " +
+               $"ไอเทม: {string.Join(", ", items)}";
+    }
+
     private static string ExtractMessageContent(string responseJson)
     {
         using var doc = JsonDocument.Parse(responseJson);
         var root = doc.RootElement;
+
+        if (root.TryGetProperty("output_text", out var responsesOutputText))
+            return responsesOutputText.GetString() ?? string.Empty;
+
+        if (root.TryGetProperty("output", out var output) && output.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var outputItem in output.EnumerateArray())
+            {
+                if (!outputItem.TryGetProperty("content", out var content) || content.ValueKind != JsonValueKind.Array)
+                    continue;
+
+                foreach (var contentItem in content.EnumerateArray())
+                {
+                    if (contentItem.TryGetProperty("text", out var text))
+                        return text.GetString() ?? string.Empty;
+                }
+            }
+        }
 
         if (root.TryGetProperty("choices", out var choices) && choices.GetArrayLength() > 0)
         {
@@ -160,9 +296,6 @@ public class LlmGameContentService
                 return content.GetString() ?? string.Empty;
             }
         }
-
-        if (root.TryGetProperty("output_text", out var outputText))
-            return outputText.GetString() ?? string.Empty;
 
         return responseJson;
     }
@@ -186,19 +319,20 @@ public class LlmGameContentService
         return trimmed;
     }
 
-    private static void NormalizeContent(GeneratedGameContent content, string survivorName)
+    private static void NormalizeContent(GeneratedGameContent content, string survivorName, int eventsPerChapter)
     {
         if (string.IsNullOrWhiteSpace(content.StoryTitle))
             content.StoryTitle = $"เส้นทางของ {survivorName}";
 
         content.Events = content.Events
             .Where(e => !string.IsNullOrWhiteSpace(e.Title) && e.Choices.Count >= 2)
-            .Take(8)
+            .Take(eventsPerChapter)
             .ToList();
 
-        if (content.Events.Count < 8)
+        if (content.Events.Count < eventsPerChapter)
             throw new InvalidOperationException("LLM returned too few playable events.");
 
+        var rewardCount = 0;
         for (var i = 0; i < content.Events.Count; i++)
         {
             var gameEvent = content.Events[i];
@@ -221,7 +355,12 @@ public class LlmGameContentService
                     : choice.ResultText;
 
                 if (choice.ItemReward != null)
+                {
                     NormalizeItem(choice.ItemReward, $"reward_{i + 1}_{c + 1}");
+                    rewardCount++;
+                    if (rewardCount > 5)
+                        choice.ItemReward = null;
+                }
             }
         }
 
@@ -252,7 +391,7 @@ public class LlmGameContentService
         item.StoryAlias ??= item.Id;
     }
 
-    private static GeneratedGameContent CreateFallbackContent(Survivor survivor)
+    private static GeneratedGameContent CreateFallbackContent(Survivor survivor, int chapterNumber = 1, int eventsPerChapter = 8)
     {
         var seed = Guid.NewGuid().ToString("N")[..8];
         var places = new[] { "โรงพยาบาลร้าง", "สถานีรถไฟใต้ดิน", "ตลาดกลางคืนที่ถูกทิ้ง", "ดาดฟ้าอพาร์ตเมนต์", "อุโมงค์ระบายน้ำ" };
@@ -260,14 +399,14 @@ public class LlmGameContentService
         var itemNames = new[] { "น้ำกรองขวดเล็ก", "ผ้าพันแผลสะอาด", "มีดพับขึ้นสนิม", "อาหารกระป๋องบุบ", "ไฟฉายมือหมุน", "ยาแก้ปวดเหลือครึ่งแผง" };
 
         var events = new List<GameEvent>();
-        for (var i = 0; i < 8; i++)
+        for (var i = 0; i < eventsPerChapter; i++)
         {
             var place = places[Random.Shared.Next(places.Length)];
             var threat = threats[Random.Shared.Next(threats.Length)];
             events.Add(new GameEvent
             {
-                Id = $"fallback_{seed}_{i + 1:D2}",
-                Title = $"{place}: ทางเลือกที่ {i + 1}",
+                Id = $"fallback_ch{chapterNumber}_{seed}_{i + 1:D2}",
+                Title = $"บทที่ {chapterNumber} - {place}: ทางเลือกที่ {i + 1}",
                 Description = $"{survivor.Name} พบ{place}ระหว่างออกสำรวจ แต่มี{threat}ขวางทางอยู่ ทุกวินาทีทำให้เสบียงลดลง",
                 Choices = new List<EventChoice>
                 {
@@ -298,15 +437,15 @@ public class LlmGameContentService
 
         return new GeneratedGameContent
         {
-            StoryTitle = $"คืนเอาตัวรอด {seed}",
+            StoryTitle = $"บทที่ {chapterNumber}: คืนเอาตัวรอด {seed}",
             UsedRemoteLlm = false,
             Events = events,
-            StartingItems = new List<Item>
+            StartingItems = chapterNumber == 1 ? new List<Item>
             {
                 CreateFallbackItem("น้ำกรองขวดเล็ก", $"start_{seed}_water"),
                 CreateFallbackItem("อาหารกระป๋องบุบ", $"start_{seed}_food"),
                 CreateFallbackItem("ผ้าพันแผลสะอาด", $"start_{seed}_bandage")
-            }
+            } : new List<Item>()
         };
     }
 
@@ -345,14 +484,46 @@ public class LlmGameContentService
 
     private static async Task<LlmRuntimeSettings> LoadSettingsAsync(CancellationToken cancellationToken)
     {
+        var envFileSettings = await LoadEnvFileSettingsAsync(cancellationToken).ConfigureAwait(false);
         var packagedSettings = await LoadPackagedSettingsAsync(cancellationToken).ConfigureAwait(false);
+        var provider = NormalizeProvider(GetSetting(new[] { "LLM_PROVIDER" }, envFileSettings, packagedSettings));
 
         return new LlmRuntimeSettings
         {
-            ApiKey = GetSetting(new[] { "OPENAI_API_KEY", "LLM_API_KEY" }, packagedSettings),
-            Endpoint = GetSetting(new[] { "LLM_ENDPOINT" }, packagedSettings),
-            Model = GetSetting(new[] { "OPENAI_MODEL", "LLM_MODEL" }, packagedSettings)
+            Provider = provider,
+            ApiKey = provider == ProviderOpenAi
+                ? GetSetting(new[] { "OPENAI_API_KEY", "LLM_API_KEY" }, envFileSettings, packagedSettings)
+                : GetSetting(new[] { "TYPHOON_API_KEY", "LLM_API_KEY" }, envFileSettings, packagedSettings),
+            Endpoint = provider == ProviderOpenAi
+                ? GetSetting(new[] { "OPENAI_ENDPOINT", "LLM_ENDPOINT" }, envFileSettings, packagedSettings) ?? OpenAiEndpoint
+                : GetSetting(new[] { "TYPHOON_ENDPOINT", "LLM_ENDPOINT" }, envFileSettings, packagedSettings) ?? TyphoonEndpoint,
+            Model = provider == ProviderOpenAi
+                ? GetSetting(new[] { "OPENAI_MODEL", "LLM_MODEL" }, envFileSettings, packagedSettings) ?? OpenAiModel
+                : GetSetting(new[] { "TYPHOON_MODEL", "LLM_MODEL" }, envFileSettings, packagedSettings) ?? TyphoonModel
         };
+    }
+
+    private static string NormalizeProvider(string? provider)
+    {
+        if (string.Equals(provider, ProviderOpenAi, StringComparison.OrdinalIgnoreCase))
+            return ProviderOpenAi;
+
+        return ProviderTyphoon;
+    }
+
+    private static async Task<Dictionary<string, string>> LoadEnvFileSettingsAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await using var stream = await FileSystem.OpenAppPackageFileAsync("llm.env").ConfigureAwait(false);
+            using var reader = new StreamReader(stream);
+            var content = await reader.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
+            return ParseEnv(content);
+        }
+        catch
+        {
+            return new Dictionary<string, string>();
+        }
     }
 
     private static async Task<Dictionary<string, string>> LoadPackagedSettingsAsync(CancellationToken cancellationToken)
@@ -379,10 +550,16 @@ public class LlmGameContentService
         return new Dictionary<string, string>();
     }
 
-    private static string? GetSetting(IReadOnlyList<string> keys, IReadOnlyDictionary<string, string> packagedSettings)
+    private static string? GetSetting(
+        IReadOnlyList<string> keys,
+        IReadOnlyDictionary<string, string> envFileSettings,
+        IReadOnlyDictionary<string, string> packagedSettings)
     {
         foreach (var key in keys)
         {
+            if (envFileSettings.TryGetValue(key, out var fromEnvFile) && !string.IsNullOrWhiteSpace(fromEnvFile))
+                return fromEnvFile;
+
             var fromPreferences = Preferences.Default.Get(key, string.Empty);
             if (!string.IsNullOrWhiteSpace(fromPreferences))
                 return fromPreferences;
@@ -398,10 +575,41 @@ public class LlmGameContentService
         return null;
     }
 
+    private static Dictionary<string, string> ParseEnv(string content)
+    {
+        var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        using var reader = new StringReader(content);
+
+        while (reader.ReadLine() is { } line)
+        {
+            var trimmed = line.Trim();
+            if (trimmed.Length == 0 || trimmed.StartsWith('#'))
+                continue;
+
+            var equalsIndex = trimmed.IndexOf('=');
+            if (equalsIndex <= 0)
+                continue;
+
+            var key = trimmed[..equalsIndex].Trim();
+            var value = trimmed[(equalsIndex + 1)..].Trim();
+
+            if ((value.StartsWith('"') && value.EndsWith('"')) ||
+                (value.StartsWith('\'') && value.EndsWith('\'')))
+            {
+                value = value[1..^1];
+            }
+
+            values[key] = value;
+        }
+
+        return values;
+    }
+
     private sealed class LlmRuntimeSettings
     {
+        public string Provider { get; set; } = DefaultProvider;
         public string? ApiKey { get; set; }
-        public string? Endpoint { get; set; }
-        public string? Model { get; set; }
+        public string Endpoint { get; set; } = TyphoonEndpoint;
+        public string Model { get; set; } = TyphoonModel;
     }
 }

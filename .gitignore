@@ -42,9 +42,6 @@ launchSettings.json
 *~.nib
 Thumbs.db
 
-# Local LLM secrets
-TheEndOfMine/Resources/Raw/llm_config.local.json
-
 # NuGet
 *.nupkg
 **/[Pp]ackages/*
@@ -55,6 +52,11 @@ TheEndOfMine/Resources/Raw/llm_config.local.json
 *.aab
 *.keystore
 !**/Resources/**
+
+# Local LLM secrets
+TheEndOfMine/Resources/Raw/llm_config.local.json
+TheEndOfMine/Resources/Raw/llm.env
+tmp/
 
 # iOS
 *.ipa

@@ -82,7 +82,7 @@ public partial class IntroPage : ContentPage
         var name = NameEntry.Text?.Trim();
         if (string.IsNullOrWhiteSpace(name))
         {
-            await DisplayAlert("Name required", "Please enter a survivor name.", "OK");
+            await DisplayAlert("ต้องใส่ชื่อ", "กรุณาใส่ชื่อผู้รอดชีวิต", "ตกลง");
             if (startButton != null) startButton.IsEnabled = true;
             return;
         }
@@ -110,6 +110,10 @@ public partial class IntroPage : ContentPage
                 GameMinute = 8 * 60, // 08:00 AM
                 EventIndex = 0,
                 StoryTitle = generatedContent.StoryTitle,
+                CurrentChapterTitle = generatedContent.StoryTitle,
+                CurrentChapter = 1,
+                MaxChapters = 4,
+                EventsPerChapter = 8,
                 StorySource = generatedContent.UsedRemoteLlm ? "llm" : "local_fallback",
                 GeneratedEvents = generatedContent.Events
             };
@@ -121,9 +125,9 @@ public partial class IntroPage : ContentPage
             if (!generatedContent.UsedRemoteLlm)
             {
                 await DisplayAlert(
-                    "LLM not configured",
+                    "ยังไม่ได้ตั้งค่า GPT",
                     "ยังไม่พบ OPENAI_API_KEY หรือ LLM_API_KEY ระบบจึงสร้างเนื้อเรื่อง fallback แบบสุ่มให้ก่อน",
-                    "OK");
+                    "ตกลง");
             }
 
             // 4. ไปหน้าเลือกความยาก
