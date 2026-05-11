@@ -41,6 +41,12 @@ public class GameEvent
     [JsonPropertyName("description")]
     public string Description { get; set; } = string.Empty;
 
+    [JsonPropertyName("imagePrompt")]
+    public string ImagePrompt { get; set; } = string.Empty;
+
+    [JsonPropertyName("imagePath")]
+    public string ImagePath { get; set; } = string.Empty;
+
     [JsonPropertyName("choices")]
     public List<EventChoice> Choices { get; set; } = new();
 }

@@ -28,26 +28,26 @@
                 <Frame Grid.Column="0" BackgroundColor="#88000000" BorderColor="#555555" Padding="10" CornerRadius="5" HorizontalOptions="Start">
                     <VerticalStackLayout Spacing="5" WidthRequest="150">
                         <Grid ColumnDefinitions="25, *">
-                            <Image Source="hp_icon.png" WidthRequest="18" BackgroundColor="Transparent" />
+                            <Image Source="story/ui/hp_icon.png" WidthRequest="18" BackgroundColor="Transparent" />
                             <ProgressBar Grid.Column="1" Progress="{Binding HPProgress}" ProgressColor="#CC3333" BackgroundColor="#333333" />
                         </Grid>
                         <Grid ColumnDefinitions="25, *">
-                            <Image Source="food_icon.png" WidthRequest="18" BackgroundColor="Transparent" />
+                            <Image Source="story/ui/food_icon.png" WidthRequest="18" BackgroundColor="Transparent" />
                             <ProgressBar Grid.Column="1" Progress="{Binding HungerProgress}" ProgressColor="#D4A017" BackgroundColor="#333333" />
                         </Grid>
                         <Grid ColumnDefinitions="25, *">
-                            <Image Source="water_icon.png" WidthRequest="18" BackgroundColor="Transparent" />
+                            <Image Source="story/ui/water_icon.png" WidthRequest="18" BackgroundColor="Transparent" />
                             <ProgressBar Grid.Column="1" Progress="{Binding ThirstProgress}" ProgressColor="#3399CC" BackgroundColor="#333333" />
                         </Grid>
                         <Grid ColumnDefinitions="25, *">
-                            <Image Source="stamina_icon.png" WidthRequest="18" BackgroundColor="Transparent" />
+                            <Image Source="story/ui/stamina_icon.png" WidthRequest="18" BackgroundColor="Transparent" />
                             <ProgressBar Grid.Column="1" Progress="{Binding FatigueProgress}" ProgressColor="#888888" BackgroundColor="#333333" />
                         </Grid>
                     </VerticalStackLayout>
                 </Frame>
 
                 <VerticalStackLayout Grid.Column="1" Spacing="2" HorizontalOptions="End">
-                    <ImageButton Source="inv_btn.png" WidthRequest="60" HeightRequest="60" BackgroundColor="Transparent" />
+                    <ImageButton Source="story/ui/inv_btn.png" WidthRequest="60" HeightRequest="60" BackgroundColor="Transparent" />
                     <Label Text="INVENTORY" TextColor="White" FontSize="10" HorizontalOptions="Center" />
                 </VerticalStackLayout>
             </Grid>

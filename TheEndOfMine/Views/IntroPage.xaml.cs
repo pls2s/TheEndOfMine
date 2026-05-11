@@ -16,7 +16,7 @@ public partial class IntroPage : ContentPage
         StartBlinkingAnimation();
 
         // โหลดรูปผู้หญิงรอไว้หลังม่าน
-        BackgroundImage.Source = "select_char_female.png";
+        BackgroundImage.Source = "story/ui/character_select/select_char_female.png";
     }
 
     private void StartBlinkingAnimation()
@@ -67,7 +67,9 @@ public partial class IntroPage : ContentPage
         await FadeOverlay.FadeTo(1, 300, Easing.CubicIn);
 
         _selected = newGender;
-        BackgroundImage.Source = (_selected == Gender.Male) ? "select_char_male.png" : "select_char_female.png";
+        BackgroundImage.Source = (_selected == Gender.Male)
+            ? "story/ui/character_select/select_char_male.png"
+            : "story/ui/character_select/select_char_female.png";
 
         await Task.Delay(100);
         await FadeOverlay.FadeTo(0, 300, Easing.CubicOut);

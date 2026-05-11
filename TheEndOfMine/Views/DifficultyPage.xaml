@@ -6,7 +6,7 @@
              Shell.NavBarIsVisible="False">
     <Grid>
         <!-- 1. รูปพื้นหลังหลัก -->
-        <Image Source="difficulty_select.png" Aspect="AspectFill" />
+        <Image Source="story/ui/difficulty_select.png" Aspect="AspectFill" />
 
         <!-- 2. เลเยอร์ปุ่มล่องหนสำหรับเลือกความยาก -->
         <AbsoluteLayout>
@@ -64,7 +64,7 @@
 
             <!-- ปุ่ม Confirm ซ่อนไว้ก่อน -->
             <Image x:Name="ConfirmBtn"
-                   Source="buttom_confirm.png"
+                   Source="story/ui/buttom_confirm.png"
                    IsVisible="False"
                    WidthRequest="300" HeightRequest="80"
                    Aspect="AspectFit"

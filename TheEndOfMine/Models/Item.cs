@@ -60,6 +60,12 @@ public class Item
     [JsonPropertyName("description_th")]
     public string DescriptionTh { get; set; } = string.Empty;
 
+    [JsonPropertyName("image_prompt")]
+    public string ImagePrompt { get; set; } = string.Empty;
+
+    [JsonPropertyName("image_path")]
+    public string ImagePath { get; set; } = string.Empty;
+
     [JsonPropertyName("story_alias")]
     public string? StoryAlias { get; set; }
 

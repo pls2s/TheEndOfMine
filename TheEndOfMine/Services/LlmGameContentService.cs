@@ -47,6 +47,13 @@ public class LlmGameContentService
         Timeout = TimeSpan.FromSeconds(45)
     };
 
+    private readonly ImageGenerationService _imageGenerationService;
+
+    public LlmGameContentService(ImageGenerationService? imageGenerationService = null)
+    {
+        _imageGenerationService = imageGenerationService ?? new ImageGenerationService();
+    }
+
     public async Task<GeneratedGameContent> GenerateNewGameAsync(Survivor survivor, CancellationToken cancellationToken = default)
     {
         return await GenerateChapterContentAsync(survivor, chapterNumber: 1, maxChapters: 4, eventsPerChapter: 8, state: null, cancellationToken)
@@ -92,6 +99,11 @@ public class LlmGameContentService
                 throw new InvalidOperationException("LLM response was empty.");
 
             NormalizeContent(generated, survivor.Name, eventsPerChapter);
+            await _imageGenerationService.GenerateChapterImagesAsync(
+                state ?? CreateImageState(survivor, chapterNumber, maxChapters, eventsPerChapter),
+                generated,
+                cancellationToken).ConfigureAwait(false);
+
             generated.UsedRemoteLlm = true;
             return generated;
         }
@@ -99,6 +111,17 @@ public class LlmGameContentService
         {
             return CreateFallbackContent(survivor, chapterNumber, eventsPerChapter);
         }
+    }
+
+    private static GameState CreateImageState(Survivor survivor, int chapterNumber, int maxChapters, int eventsPerChapter)
+    {
+        return new GameState
+        {
+            Survivor = survivor,
+            CurrentChapter = chapterNumber,
+            MaxChapters = maxChapters,
+            EventsPerChapter = eventsPerChapter
+        };
     }
 
     private static object CreateLlmRequest(LlmRuntimeSettings settings, string prompt)
@@ -199,6 +222,8 @@ public class LlmGameContentService
         - ค่าผลกระทบตัวเลขต้องสมดุล และอยู่ระหว่าง -30 ถึง 30
         - ใส่ itemReward ให้ choice จำนวน 4 จุดพอดี โดย itemReward ต้องเป็น item object ครบถ้วน
         - choice อื่นที่ไม่ได้ให้ไอเทมห้ามใส่ key itemReward
+        - ทุก event ต้องมี imagePrompt เป็นภาษาอังกฤษ สำหรับสร้างภาพประกอบแบบ realistic gritty survival game art, no text, no UI, no logo
+        - ทุก item ใน startingItems และ itemReward ต้องมี image_prompt เป็นภาษาอังกฤษ สำหรับสร้างภาพไอเทมเดี่ยวบนพื้นหลังเรียบ, no text, no logo
         {{startingItemsRule}}
         {{endingRule}}
         - โทนต้องกดดัน เน้นการเอาตัวรอด และแต่ละเหตุการณ์ต้องไม่ซ้ำอารมณ์กัน
@@ -211,6 +236,7 @@ public class LlmGameContentService
               "id": "evt_01",
               "title": "string",
               "description": "string",
+              "imagePrompt": "English image prompt",
               "choices": [
                 {
                   "id": "c1",
@@ -240,6 +266,7 @@ public class LlmGameContentService
                       "fatigue_restore": 0
                     },
                     "description_th": "string",
+                    "image_prompt": "English item image prompt",
                     "story_alias": "gen_alias"
                   }
                 }
@@ -340,6 +367,9 @@ public class LlmGameContentService
             gameEvent.Description = string.IsNullOrWhiteSpace(gameEvent.Description)
                 ? "สถานการณ์ตรงหน้าบีบให้คุณต้องตัดสินใจทันที"
                 : gameEvent.Description;
+            gameEvent.ImagePrompt = string.IsNullOrWhiteSpace(gameEvent.ImagePrompt)
+                ? $"Realistic gritty post-apocalyptic Thai survival game scene, {gameEvent.Title}, no text, no UI, no logo"
+                : gameEvent.ImagePrompt;
             gameEvent.Choices = gameEvent.Choices.Take(2).ToList();
 
             for (var c = 0; c < gameEvent.Choices.Count; c++)
@@ -388,6 +418,9 @@ public class LlmGameContentService
         item.DescriptionTh = string.IsNullOrWhiteSpace(item.DescriptionTh)
             ? "ไอเทมจากเรื่องราวที่ถูกสร้างใหม่"
             : item.DescriptionTh;
+        item.ImagePrompt = string.IsNullOrWhiteSpace(item.ImagePrompt)
+            ? $"Single survival item, {item.NameEn}, realistic game inventory icon, plain dark background, no text, no logo"
+            : item.ImagePrompt;
         item.StoryAlias ??= item.Id;
     }
 
