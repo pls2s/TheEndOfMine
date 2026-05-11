@@ -10,6 +10,10 @@ public class GameState
     public Difficulty Difficulty { get; set; }
     public GameStatus Status { get; set; } = GameStatus.NotStarted;
 
+    public string StoryTitle { get; set; } = string.Empty;
+    public string StorySource { get; set; } = string.Empty;
+    public List<GameEvent> GeneratedEvents { get; set; } = new();
+
     public int DayCount { get; set; } = 1;
     public int GameMinute { get; set; } = 0;   // 0–1439 (24 ชั่วโมง = 1440 นาที)
 

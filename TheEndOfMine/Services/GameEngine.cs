@@ -41,15 +41,20 @@ public class GameEngine
 
     public void StartGame(Survivor survivor, Difficulty difficulty)
     {
-        CurrentState = new GameState
+        StartGame(new GameState
         {
             Survivor = survivor,
             Difficulty = difficulty,
             Status = GameStatus.Running,
             DayCount = 1,
             GameMinute = 0
-        };
+        });
+    }
 
+    public void StartGame(GameState state)
+    {
+        CurrentState = state;
+        CurrentState.Status = GameStatus.Running;
         _saveService.SaveCheckpoint(CurrentState);
         _gameTimer.Start();
         NotifyStateChanged();
@@ -78,7 +83,7 @@ public class GameEngine
 
         ApplyStatChange(fatigueDelta: 5f);
 
-        var gameEvent = await _eventService.GetNextEventAsync(CurrentState.EventIndex);
+        var gameEvent = await _eventService.GetNextEventAsync(CurrentState.EventIndex, CurrentState.GeneratedEvents);
         if (gameEvent != null)
         {
             // เดิน index ไปข้างหน้าก่อน invoke เพื่อไม่ให้ซ้ำถ้า save ระหว่าง event

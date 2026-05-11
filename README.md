@@ -17,6 +17,7 @@
 - **ระบบเวลา** — 1 วินาทีจริง = 1 นาทีในเกม
 - **Status Management** — HP, Hunger, Thirst, Fatigue ลดลงตามเวลา
 - **Random Events** — เหตุการณ์สุ่มพร้อมตัวเลือกที่ส่งผลต่อสถานะ
+- **LLM Generated Story** — เริ่มเกมใหม่แต่ละครั้งจะสร้างเนื้อเรื่อง เหตุการณ์ และไอเทมใหม่ด้วย LLM
 - **Inventory System** — กระเป๋าสัมภาระ 4x4 (16 ช่อง)
 - **Save/Load** — บันทึกและโหลด checkpoint
 
@@ -28,6 +29,7 @@
 | C# | Programming language |
 | SQLite | Local database (save/load) |
 | JSON | Event data storage |
+| OpenAI-compatible LLM API | Generate new story/events/items on new game |
 
 ## 📱 Supported Platforms
 
@@ -65,6 +67,35 @@ TheEndOfMine/
 ```
 
 ## 🚀 Build & Run
+
+### LLM Setup
+
+เกมจะพยายามเรียก LLM ตอนผู้เล่นกดเริ่มเกมใหม่ เพื่อสร้าง:
+
+- ชื่อเรื่องของรอบนั้น
+- เหตุการณ์ 8 เหตุการณ์
+- ตัวเลือกพร้อมผลกระทบต่อ HP / Hunger / Thirst / Fatigue
+- ไอเทมเริ่มต้น 3 ชิ้น
+- ไอเทมรางวัลจากบางตัวเลือก
+
+ตั้งค่า API key ได้ผ่าน environment variable:
+
+```bash
+export OPENAI_API_KEY="your_api_key"
+export OPENAI_MODEL="gpt-4o-mini"
+```
+
+หรือสร้างไฟล์ local config ที่ไม่ถูก commit:
+
+```json
+// TheEndOfMine/Resources/Raw/llm_config.local.json
+{
+  "OPENAI_API_KEY": "your_api_key",
+  "OPENAI_MODEL": "gpt-4o-mini"
+}
+```
+
+ถ้าไม่ได้ตั้งค่า key หรือเรียก LLM ไม่สำเร็จ เกมจะ fallback ไปสร้างเนื้อเรื่องและไอเทมแบบสุ่มภายในแอป เพื่อให้ยังเริ่มเกมใหม่ได้ตามปกติ
 
 ```bash
 # Android
