@@ -29,7 +29,18 @@ public class Inventory
         int index = Slots.IndexOf(item);
         if (index == -1) return false;
         Slots[index] = null;
+        CompactSlots();
         return true;
+    }
+
+    public void CompactSlots()
+    {
+        var slotCount = Math.Max(Slots.Count, Capacity);
+        var items = Slots.Where(slot => slot != null).ToList();
+
+        Slots = items
+            .Concat(new Item?[Math.Max(0, slotCount - items.Count)])
+            .ToList();
     }
 
     // เพิ่มแถวใหม่ 1 แถว (4 ช่อง)

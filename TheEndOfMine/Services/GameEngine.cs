@@ -84,6 +84,7 @@ public class GameEngine
         if (CurrentState == null) return;
         _gameTimer.Stop();
         CurrentState.Status = GameStatus.Paused;
+        NotifyStateChanged();
     }
 
     public void ResumeGame()
@@ -91,6 +92,7 @@ public class GameEngine
         if (CurrentState?.Status != GameStatus.Paused) return;
         CurrentState.Status = GameStatus.Running;
         _gameTimer.Start();
+        NotifyStateChanged();
     }
 
     // ---- Player Actions ----
@@ -137,6 +139,7 @@ public class GameEngine
         if (CurrentState.CurrentChapter >= CurrentState.MaxChapters)
         {
             _gameTimer.Stop();
+            ApplyStoryEnding();
             CurrentState.Status = GameStatus.GameOver;
             MainThread.BeginInvokeOnMainThread(() => OnGameOver?.Invoke());
             return null;
@@ -212,7 +215,8 @@ public class GameEngine
         if (CurrentState == null) return;
         _isEventInProgress = false;
 
-        RecordStoryMemory(_activeEvent, choice);
+        var resolvedEvent = _activeEvent;
+        RecordStoryMemory(resolvedEvent, choice);
         _activeEvent = null;
 
         ApplyStatChange(
@@ -227,7 +231,7 @@ public class GameEngine
         if (choice.ItemReward != null)
             CurrentState.Survivor.Inventory.AddItem(choice.ItemReward);
 
-        CheckDeath();
+        CheckDeath(BuildChoiceDeathCause(resolvedEvent, choice));
         if (CurrentState.Status == GameStatus.Running)
             _saveService.SaveCheckpoint(CurrentState);
         NotifyStateChanged();
@@ -459,6 +463,9 @@ public class GameEngine
             return;
 
         ApplyStatChange(hpDelta: -Random.Shared.Next(4, 13), fatigueDelta: 6f);
+        if (CurrentState.Survivor.HP <= 0)
+            CurrentState.DeathCause = "เสียงที่สะสมไว้ดังพอจะดึงอันตรายเข้ามาใกล้ คุณถูกโจมตีระหว่างเดินทางก่อนจะหนีออกมาได้";
+
         CurrentState.Noise = Math.Clamp(CurrentState.Noise - 18f, 0f, 100f);
     }
 
@@ -578,17 +585,105 @@ public class GameEngine
         s.Fatigue = Math.Clamp(s.Fatigue + fatigueDelta, 0f, 100f);
     }
 
-    private void CheckDeath()
+    private void CheckDeath(string? causeOverride = null)
     {
         if (CurrentState == null || CurrentState.Survivor.HP > 0) return;
 
         _gameTimer.Stop();
+        ApplyDeathEnding(causeOverride);
         CurrentState.Status = GameStatus.GameOver;
         if (CurrentState.Difficulty == Difficulty.Hard)
             _saveService.DeleteAllSaves();
         else
             _saveService.DeleteSave();
         MainThread.BeginInvokeOnMainThread(() => OnGameOver?.Invoke());
+    }
+
+    private void ApplyStoryEnding()
+    {
+        if (CurrentState == null) return;
+
+        CurrentState.IsStoryEnding = true;
+        CurrentState.GameOverTitle = "รอดไปถึงปลายทาง";
+        CurrentState.DeathCause = string.Empty;
+        CurrentState.EndingImagePath = BuildEndingImagePath();
+
+        var survivorName = string.IsNullOrWhiteSpace(CurrentState.Survivor.Name)
+            ? "คุณ"
+            : CurrentState.Survivor.Name;
+        var lastMemory = CurrentState.StoryMemory.LastOrDefault()?.Summary;
+        var context = string.IsNullOrWhiteSpace(lastMemory)
+            ? "หลังจากผ่านเมืองที่พังทลายและความเสี่ยงตลอดทาง"
+            : $"จากผลของเหตุการณ์ล่าสุด: {lastMemory}";
+
+        CurrentState.GameOverDetail =
+            $"{context} {survivorName} ไปถึงสัญญาณช่วยเหลือก่อนเมืองจะปิดตาย เฮลิคอปเตอร์ยกตัวขึ้นเหนือซากตึก ทิ้งเสียงฝูงซอมบี้และถนนมืดไว้เบื้องล่าง การเอาชีวิตรอดครั้งนี้ไม่ได้ลบทุกอย่างที่เสียไป แต่มันพิสูจน์ว่าคุณยังพาตัวเองไปถึงวันพรุ่งนี้ได้";
+    }
+
+    private void ApplyDeathEnding(string? causeOverride)
+    {
+        if (CurrentState == null) return;
+
+        CurrentState.IsStoryEnding = false;
+        CurrentState.GameOverTitle = "เสียชีวิต";
+        CurrentState.EndingImagePath = string.Empty;
+
+        var cause = !string.IsNullOrWhiteSpace(causeOverride)
+            ? causeOverride
+            : !string.IsNullOrWhiteSpace(CurrentState.DeathCause)
+                ? CurrentState.DeathCause
+                : BuildDeathCauseFromState(CurrentState);
+
+        CurrentState.DeathCause = cause;
+
+        var lastMemory = CurrentState.StoryMemory.LastOrDefault()?.Summary;
+        CurrentState.GameOverDetail = string.IsNullOrWhiteSpace(lastMemory)
+            ? "การเดินทางจบลงก่อนจะพบทางออกจากเมือง"
+            : $"เหตุการณ์สุดท้ายก่อนล้มลง: {lastMemory}";
+    }
+
+    private string BuildEndingImagePath()
+    {
+        if (CurrentState == null)
+            return "story/ending/ending_helicopter_survivors.png";
+
+        var gender = CurrentState.Survivor.Gender == Gender.Male ? "male" : "female";
+        return $"story/{gender}/ending/{gender}_ending_helicopter_survivors.png";
+    }
+
+    private static string BuildChoiceDeathCause(GameEvent? gameEvent, EventChoice choice)
+    {
+        if (choice.HpEffect >= 0)
+            return string.Empty;
+
+        var eventTitle = string.IsNullOrWhiteSpace(gameEvent?.Title)
+            ? "เหตุการณ์ล่าสุด"
+            : gameEvent!.Title;
+        var result = string.IsNullOrWhiteSpace(choice.ResultText)
+            ? "การตัดสินใจนั้นทำให้บาดเจ็บหนักเกินกว่าจะไปต่อ"
+            : choice.ResultText;
+
+        return $"{eventTitle}: คุณเลือก \"{choice.Text}\" แล้วผลลัพธ์รุนแรงถึงชีวิต — {Truncate(result, 180)}";
+    }
+
+    private static string BuildDeathCauseFromState(GameState state)
+    {
+        var s = state.Survivor;
+
+        if (s.Thirst <= 0 && s.Hunger <= 0)
+            return "ร่างกายขาดทั้งน้ำและอาหารนานเกินไป เลือดค่อย ๆ ลดลงจนหมดแรงและเสียชีวิต";
+        if (s.Thirst <= 0)
+            return "ขาดน้ำรุนแรง ร่างกายเริ่มมึน ชีพจรอ่อนลง และเลือดลดลงจนเสียชีวิต";
+        if (s.Hunger <= 0)
+            return "อดอาหารต่อเนื่องจนร่างกายไม่มีแรงพยุงตัว บาดแผลและความอ่อนล้าทำให้เสียชีวิต";
+        if (state.Infection >= InfectionWarningThreshold)
+            return "การติดเชื้อในร่างกายลุกลามเกินควบคุม ไข้และบาดแผลทำให้เลือดลดลงจนเสียชีวิต";
+        if (state.Noise >= NoisyEventThreshold)
+            return "เสียงที่สะสมไว้ดึงอันตรายเข้ามาใกล้เกินไป คุณถูกโจมตีจนบาดเจ็บถึงชีวิต";
+        if (s.Fatigue >= 95)
+            return "ความเหนื่อยล้าสะสมทำให้ตัดสินใจช้าลงและทรุดลงก่อนจะหาที่ปลอดภัยได้";
+
+        return "บาดแผลและความเสี่ยงที่สะสมระหว่างทางทำให้ร่างกายรับไม่ไหวและเสียชีวิต";
     }
 
     private bool AdvanceClockOneMinute()

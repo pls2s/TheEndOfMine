@@ -11,6 +11,7 @@ public partial class IntroPage : ContentPage
     private Gender _selected = Gender.Female; // เริ่มต้นที่ผู้หญิง
     private bool _isStarting;
     private TaskCompletionSource<bool>? _alertCompletion;
+    private CancellationTokenSource? _startLoadingPulseCts;
 
     public IntroPage()
     {
@@ -108,7 +109,9 @@ public partial class IntroPage : ContentPage
             var contentGenerator = new LlmGameContentService();
 
             await SetStartLoadingProgressAsync(0.18, "กำลังสร้าง Chapter 1 และเหตุการณ์เริ่มต้น");
+            StartStartLoadingPulse();
             var generatedContent = await contentGenerator.GenerateNewGameAsync(survivor);
+            StopStartLoadingPulse();
             await SetStartLoadingProgressAsync(
                 0.68,
                 "สร้างบทแรกเสร็จแล้ว กำลังจัดฉาก",
@@ -166,6 +169,7 @@ public partial class IntroPage : ContentPage
         }
         catch
         {
+            StopStartLoadingPulse();
             await HideStartLoadingAsync();
             await ShowGameAlertAsync("โหลดไม่สำเร็จ", "สร้างเกมใหม่ไม่สำเร็จ กรุณาลองอีกครั้ง");
         }
@@ -198,6 +202,65 @@ public partial class IntroPage : ContentPage
         StartLoadingDetailLabel.Text = detail;
         StartLoadingPercentLabel.Text = $"{(int)Math.Round(progress * 100)}%";
         await StartLoadingProgress.ProgressTo(progress, 260, Easing.CubicOut);
+    }
+
+    private void StartStartLoadingPulse()
+    {
+        StopStartLoadingPulse();
+
+        _startLoadingPulseCts = new CancellationTokenSource();
+        var token = _startLoadingPulseCts.Token;
+
+        _ = Task.Run(async () =>
+        {
+            var details = new[]
+            {
+                "กำลังวางโครงเรื่องและฉากเปิด",
+                "กำลังสร้างเหตุการณ์ให้ต่อเนื่องกัน",
+                "กำลังเลือกไอเทมเริ่มต้นให้เข้ากับเรื่อง",
+                "กำลังตรวจทางเลือกและผลลัพธ์",
+                "กำลังจัดสมดุลค่าสถานะของผู้รอดชีวิต"
+            };
+
+            var index = 0;
+            while (!token.IsCancellationRequested)
+            {
+                await MainThread.InvokeOnMainThreadAsync(async () =>
+                {
+                    var current = StartLoadingProgress.Progress;
+                    if (current < 0.86)
+                    {
+                        var step = current < 0.54 ? 0.028 : 0.01;
+                        var next = Math.Min(0.86, current + step);
+                        StartLoadingPercentLabel.Text = $"{(int)Math.Round(next * 100)}%";
+                        await StartLoadingProgress.ProgressTo(next, 420, Easing.CubicOut);
+                    }
+
+                    StartLoadingDetailLabel.Text = details[index % details.Length];
+                });
+
+                index++;
+
+                try
+                {
+                    await Task.Delay(560, token);
+                }
+                catch (TaskCanceledException)
+                {
+                    break;
+                }
+            }
+        }, token);
+    }
+
+    private void StopStartLoadingPulse()
+    {
+        if (_startLoadingPulseCts == null)
+            return;
+
+        _startLoadingPulseCts.Cancel();
+        _startLoadingPulseCts.Dispose();
+        _startLoadingPulseCts = null;
     }
 
     private async Task HideStartLoadingAsync()

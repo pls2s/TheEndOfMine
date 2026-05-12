@@ -5,7 +5,7 @@
              BackgroundColor="#050505"
              Shell.NavBarIsVisible="False"
              NavigationPage.HasNavigationBar="False">
-    <Grid Padding="26">
+    <Grid Padding="24">
         <VerticalStackLayout Spacing="18"
                              VerticalOptions="Center"
                              HorizontalOptions="Center">
@@ -15,10 +15,49 @@
                    FontAttributes="Bold"
                    HorizontalTextAlignment="Center" />
 
-            <Label Text="การเดินทางครั้งนี้จบลงแล้ว"
+            <Border x:Name="EndingImageFrame"
+                    IsVisible="False"
+                    Stroke="#5C503A"
+                    StrokeThickness="1"
+                    BackgroundColor="#10100E"
+                    WidthRequest="310"
+                    HeightRequest="190">
+                <Border.StrokeShape>
+                    <RoundRectangle CornerRadius="14" />
+                </Border.StrokeShape>
+                <Image x:Name="EndingImage"
+                       Aspect="AspectFill" />
+            </Border>
+
+            <Label x:Name="ResultTitleLabel"
+                   Text="การเดินทางครั้งนี้จบลงแล้ว"
                    TextColor="#EFE8D8"
-                   FontSize="18"
+                   FontSize="20"
+                   FontAttributes="Bold"
                    HorizontalTextAlignment="Center" />
+
+            <Border x:Name="CauseFrame"
+                    Stroke="#4E493F"
+                    StrokeThickness="1"
+                    BackgroundColor="#141210"
+                    Padding="16"
+                    WidthRequest="310">
+                <Border.StrokeShape>
+                    <RoundRectangle CornerRadius="12" />
+                </Border.StrokeShape>
+                <VerticalStackLayout Spacing="8">
+                    <Label x:Name="CauseTitleLabel"
+                           Text="สาเหตุ"
+                           TextColor="#D8B45F"
+                           FontSize="13"
+                           FontAttributes="Bold" />
+                    <Label x:Name="CauseLabel"
+                           Text="กำลังสรุปเหตุการณ์สุดท้าย"
+                           TextColor="#EFE8D8"
+                           FontSize="14"
+                           LineBreakMode="WordWrap" />
+                </VerticalStackLayout>
+            </Border>
 
             <Label x:Name="DeathDetailLabel"
                    Text="ถ้าต้องการเริ่มใหม่ ให้กลับไปเลือกตัวละครอีกครั้ง"

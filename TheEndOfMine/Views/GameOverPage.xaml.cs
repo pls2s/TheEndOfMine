@@ -7,12 +7,18 @@ using TheEndOfMine.Services;
 public partial class GameOverPage : ContentPage
 {
     private readonly SaveService _saveService = new();
+    private readonly GameState? _gameOverState;
     private GameState? _dailyCheckpoint;
     private bool _hasLoadedCheckpoint;
 
     public GameOverPage()
     {
         InitializeComponent();
+    }
+
+    public GameOverPage(GameState? gameOverState) : this()
+    {
+        _gameOverState = gameOverState;
     }
 
     protected override async void OnAppearing()
@@ -22,19 +28,62 @@ public partial class GameOverPage : ContentPage
 
         _hasLoadedCheckpoint = true;
         _dailyCheckpoint = await _saveService.LoadDailyCheckpointAsync();
+        ApplyGameOverSummary(_gameOverState);
 
-        var canRespawn = _dailyCheckpoint is { Difficulty: not Difficulty.Hard } &&
+        var canRespawn = _gameOverState?.IsStoryEnding != true &&
+            _dailyCheckpoint is { Difficulty: not Difficulty.Hard } &&
             _dailyCheckpoint.Survivor.HP > 0;
 
         RespawnButton.IsVisible = canRespawn;
         if (canRespawn)
         {
             RespawnButton.Text = $"กลับไป 00:00 วันที่ {_dailyCheckpoint!.DayCount}";
-            DeathDetailLabel.Text = "โหลดกลับไปยัง daily checkpoint ตอนเริ่มวันนั้น ค่าสถานะและของในกระเป๋าจะย้อนกลับตามเซฟ";
+            DeathDetailLabel.Text += "\n\nกลับไปยัง daily checkpoint ตอนเริ่มวันนั้น ค่าสถานะและของในกระเป๋าจะย้อนกลับตามเซฟ";
+        }
+        else if (_gameOverState?.IsStoryEnding == true)
+        {
+            DeathDetailLabel.Text += "\n\nเรื่องราวจบแล้ว สามารถกลับหน้าเริ่มเกมเพื่อเริ่มรอบใหม่";
+        }
+        else if (_gameOverState?.Difficulty == Difficulty.Hard)
+        {
+            DeathDetailLabel.Text += "\n\nโหมด Hard ไม่สามารถกลับไปเกิดใหม่ได้";
         }
         else
         {
-            DeathDetailLabel.Text = "โหมด Hard หรือไม่พบ daily checkpoint จึงกลับไปเกิดใหม่ไม่ได้";
+            DeathDetailLabel.Text += "\n\nไม่พบ daily checkpoint จึงกลับไปเกิดใหม่ไม่ได้";
+        }
+    }
+
+    private void ApplyGameOverSummary(GameState? state)
+    {
+        if (state == null)
+        {
+            ResultTitleLabel.Text = "การเดินทางครั้งนี้จบลงแล้ว";
+            CauseTitleLabel.Text = "สาเหตุ";
+            CauseLabel.Text = "ไม่พบข้อมูลเหตุการณ์สุดท้าย";
+            DeathDetailLabel.Text = "ถ้าต้องการเริ่มใหม่ ให้กลับไปเลือกตัวละครอีกครั้ง";
+            return;
+        }
+
+        ResultTitleLabel.Text = string.IsNullOrWhiteSpace(state.GameOverTitle)
+            ? state.IsStoryEnding ? "รอดไปถึงปลายทาง" : "เสียชีวิต"
+            : state.GameOverTitle;
+
+        CauseTitleLabel.Text = state.IsStoryEnding ? "ฉากจบ" : "สาเหตุการตาย";
+        CauseLabel.Text = state.IsStoryEnding
+            ? "ใช้ฉากจบที่สอดคล้องกับเส้นเรื่องและเพศของตัวละคร"
+            : string.IsNullOrWhiteSpace(state.DeathCause)
+                ? "บาดแผลและความเสี่ยงที่สะสมระหว่างทางทำให้ร่างกายรับไม่ไหว"
+                : state.DeathCause;
+
+        DeathDetailLabel.Text = string.IsNullOrWhiteSpace(state.GameOverDetail)
+            ? "ถ้าต้องการเริ่มใหม่ ให้กลับไปเลือกตัวละครอีกครั้ง"
+            : state.GameOverDetail;
+
+        if (state.IsStoryEnding && !string.IsNullOrWhiteSpace(state.EndingImagePath))
+        {
+            EndingImage.Source = state.EndingImagePath;
+            EndingImageFrame.IsVisible = true;
         }
     }
 

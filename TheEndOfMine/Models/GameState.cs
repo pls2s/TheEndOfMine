@@ -22,6 +22,11 @@ public class GameState
     public List<GameEvent> GeneratedEvents { get; set; } = new();
     public string StoryArcSummary { get; set; } = string.Empty;
     public List<StoryMemoryEntry> StoryMemory { get; set; } = new();
+    public bool IsStoryEnding { get; set; }
+    public string GameOverTitle { get; set; } = string.Empty;
+    public string GameOverDetail { get; set; } = string.Empty;
+    public string DeathCause { get; set; } = string.Empty;
+    public string EndingImagePath { get; set; } = string.Empty;
 
     public int DayCount { get; set; } = 1;
     public int GameMinute { get; set; } = 0;   // 0–1439 (24 ชั่วโมง = 1440 นาที)

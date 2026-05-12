@@ -7,7 +7,7 @@ public static class ItemRewardConsistencyService
     private static readonly ItemProfile[] Profiles =
     [
         new("antiseptic", "น้ำยาฆ่าเชื้อ", "Antiseptic", "Medicine", ["น้ำยาฆ่าเชื้อ", "ฆ่าเชื้อ", "antiseptic", "แอลกอฮอล์ล้างแผล"]),
-        new("backpack", "กระเป๋าเป้", "Backpack", "Misc", ["กระเป๋าเป้", "กระเป๋า", "backpack"]),
+        new("backpack", "กระเป๋าเป้", "Backpack", "Misc", ["กระเป๋าเป้", "backpack"]),
         new("bandage", "ผ้าพันแผล", "Bandage", "Medicine", ["ผ้าพันแผล", "ผ้าก๊อซ", "bandage"]),
         new("battery_pack", "แบตเตอรี่สำรอง", "Battery Pack", "Tool", ["แบตเตอรี่สำรอง", "แบตสำรอง", "battery pack", "power bank"]),
         new("binoculars", "กล้องส่องทางไกล", "Binoculars", "Tool", ["กล้องส่องทางไกล", "binoculars"]),
@@ -74,31 +74,28 @@ public static class ItemRewardConsistencyService
         item.NameTh = profile.NameTh;
         item.NameEn = profile.NameEn;
         item.Category = profile.Category;
-        item.DescriptionTh = string.IsNullOrWhiteSpace(item.DescriptionTh)
-            ? $"ไอเทมประเภท{profile.Category}ที่พบจากเหตุการณ์"
-            : item.DescriptionTh;
+        item.DescriptionTh = GetProfileDescription(profile.Alias);
     }
 
     private static ItemProfile? FindProfile(Item item, string context)
     {
-        var text = $"{item.NameTh} {item.NameEn} {item.Id} {item.Category} {item.Subcategory} {item.DescriptionTh} {context}".ToLowerInvariant();
-        var semanticMatch = Profiles
-            .Select(profile => new
-            {
-                Profile = profile,
-                Score = profile.Keywords.Count(keyword => text.Contains(keyword, StringComparison.OrdinalIgnoreCase))
-            })
-            .Where(match => match.Score > 0)
-            .OrderByDescending(match => match.Score)
-            .FirstOrDefault();
+        var itemCoreText = $"{item.NameTh} {item.NameEn} {item.Id} {item.Category} {item.Subcategory} {item.StoryAlias}";
+        var itemCoreMatch = BestProfileMatch(itemCoreText);
+        if (itemCoreMatch != null)
+            return itemCoreMatch;
 
-        if (semanticMatch != null)
-            return semanticMatch.Profile;
+        var descriptionMatch = BestProfileMatch(item.DescriptionTh);
+        if (descriptionMatch != null)
+            return descriptionMatch;
 
         var aliasMatch = Profiles.FirstOrDefault(profile =>
             string.Equals(profile.Alias, item.StoryAlias, StringComparison.OrdinalIgnoreCase));
         if (aliasMatch != null)
             return aliasMatch;
+
+        var contextMatch = BestProfileMatch(RemoveGenericInventoryPhrases(context));
+        if (contextMatch != null)
+            return contextMatch;
 
         return item.Category.ToLowerInvariant() switch
         {
@@ -108,6 +105,84 @@ public static class ItemRewardConsistencyService
             "weapon" => Profiles.First(profile => profile.Alias == "knife"),
             "tool" => Profiles.First(profile => profile.Alias == "wrench"),
             _ => null
+        };
+    }
+
+    private static ItemProfile? BestProfileMatch(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return null;
+
+        var lowered = text.ToLowerInvariant();
+        return Profiles
+            .Select(profile => new
+            {
+                Profile = profile,
+                Score = profile.Keywords.Count(keyword => lowered.Contains(keyword, StringComparison.OrdinalIgnoreCase))
+            })
+            .Where(match => match.Score > 0)
+            .OrderByDescending(match => match.Score)
+            .FirstOrDefault()
+            ?.Profile;
+    }
+
+    private static string RemoveGenericInventoryPhrases(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return string.Empty;
+
+        return text
+            .Replace("ใส่กระเป๋า", "", StringComparison.OrdinalIgnoreCase)
+            .Replace("เก็บเข้ากระเป๋า", "", StringComparison.OrdinalIgnoreCase)
+            .Replace("เก็บใส่กระเป๋า", "", StringComparison.OrdinalIgnoreCase)
+            .Replace("ในกระเป๋า", "", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string GetProfileDescription(string alias)
+    {
+        return alias switch
+        {
+            "antiseptic" => "น้ำยาฆ่าเชื้อสำหรับล้างแผล ลดความเสี่ยงติดเชื้อหลังสัมผัสสิ่งสกปรก",
+            "backpack" => "กระเป๋าเป้สำหรับเก็บและพกพาของ ช่วยจัดสัมภาระให้เป็นระเบียบ แต่ใช้รักษาแผลหรือกินดื่มไม่ได้",
+            "bandage" => "ผ้าพันแผลขนาดเล็ก ใช้พันแผลหรือหยุดเลือดเบื้องต้น ใช้แล้วไม่สามารถนำกลับมาใช้ใหม่ได้",
+            "battery_pack" => "แบตเตอรี่สำรองสำหรับชาร์จหรือจ่ายไฟให้อุปกรณ์ขนาดเล็ก",
+            "binoculars" => "กล้องส่องทางไกล ใช้มองสำรวจพื้นที่ไกล ๆ ก่อนตัดสินใจเคลื่อนที่",
+            "blanket" => "ผ้าห่มเก่าแต่ยังใช้งานได้ ช่วยกันหนาวและพักฟื้นตอนหยุดพัก",
+            "canned_food" => "อาหารกระป๋องที่ยังพอกินได้ ใช้เพิ่มค่าอาหารเมื่อเปิดกิน",
+            "canteen" => "กระติกน้ำสำหรับพกน้ำดื่ม ช่วยให้เดินทางได้นานขึ้น",
+            "compass" => "เข็มทิศสำหรับจับทิศทาง ช่วยลดโอกาสหลงทางในพื้นที่รกร้าง",
+            "cookpot" => "หม้อสนามสำหรับต้มน้ำหรืออุ่นอาหารเมื่อมีแหล่งความร้อน",
+            "first_aid_kit" => "ชุดปฐมพยาบาล มีอุปกรณ์รักษาแผลพื้นฐาน ช่วยฟื้นพลังชีวิตและลดความเสี่ยงติดเชื้อ",
+            "flare" => "พลุสัญญาณสำหรับขอความช่วยเหลือหรือเบี่ยงเบนความสนใจในระยะไกล",
+            "flashlight" => "ไฟฉายสำหรับส่องทางในพื้นที่มืด ต้องระวังเรื่องแบตเตอรี่และเสียงจากการใช้งาน",
+            "fuel_can" => "ถังน้ำมันสำหรับเติมเชื้อเพลิงหรือใช้กับอุปกรณ์ที่ต้องการน้ำมัน",
+            "gloves" => "ถุงมือช่วยป้องกันมือจากเศษแก้ว สนิม และคราบสกปรก",
+            "helmet" => "หมวกนิรภัยช่วยป้องกันศีรษะจากเศษซากหรือของตกใส่",
+            "knife" => "มีดพับขนาดเล็ก ใช้ตัดของ ป้องกันตัว หรือจัดการสิ่งกีดขวางบางอย่าง",
+            "knife_sheath" => "ปลอกมีดสำหรับเก็บมีดให้ปลอดภัยและหยิบใช้ได้เร็วขึ้น",
+            "lighter" => "ไฟแช็กสำหรับจุดไฟ ใช้กับการก่อไฟหรือให้แสงชั่วคราว",
+            "lockpick_set" => "ชุดสะเดาะกุญแจ ใช้เปิดล็อกบางประเภทโดยไม่ทำเสียงดังมาก",
+            "machete" => "มีดพร้าคม ใช้ตัดสิ่งกีดขวางหรือป้องกันตัวได้ดีกว่ามีดเล็ก",
+            "map" => "แผนที่เก่าของพื้นที่ ช่วยวางเส้นทางและหาจุดสำคัญ",
+            "mask" => "หน้ากากช่วยกรองฝุ่น ควัน หรือกลิ่นปนเปื้อนบางส่วน",
+            "matches" => "ไม้ขีดไฟ ใช้จุดไฟได้แต่มีจำนวนจำกัดและต้องเก็บให้แห้ง",
+            "medicine_bottle" => "ขวดยาสำหรับรักษาอาการเจ็บป่วยเบื้องต้น ใช้เมื่อจำเป็น",
+            "painkillers" => "ยาแก้ปวด ลดอาการบาดเจ็บและช่วยให้เคลื่อนไหวต่อได้ชั่วคราว",
+            "pliers" => "คีมสำหรับหนีบ ดึง หรือตัดลวดในงานซ่อมและเปิดทาง",
+            "radio" => "วิทยุสื่อสารสำหรับรับสัญญาณหรือขอความช่วยเหลือเมื่อมีแบตเตอรี่",
+            "radio_battery" => "แบตเตอรี่วิทยุ ใช้เป็นพลังงานสำรองให้วิทยุหรืออุปกรณ์สื่อสาร",
+            "rope_coil" => "ม้วนเชือก ใช้ผูก ลาก ปีน หรือทำทางผ่านจุดอันตราย",
+            "screwdriver" => "ไขควงสำหรับขันน็อต เปิดฝาครอบ หรือแกะอุปกรณ์บางอย่าง",
+            "sewing_kit" => "ชุดเย็บแผล ใช้ปิดแผลลึกหรือซ่อมผ้าในสถานการณ์จำเป็น",
+            "sleeping_bag" => "ถุงนอนช่วยให้พักผ่อนได้ดีขึ้นในพื้นที่เย็นหรือพื้นแข็ง",
+            "stove" => "เตาพกพาสำหรับอุ่นอาหารหรือต้มน้ำเมื่อมีเชื้อเพลิง",
+            "tape_roll" => "เทปพันสายไฟ ใช้ซ่อมของชั่วคราว มัดยึด หรือปิดรอยรั่วเล็ก ๆ",
+            "torch" => "คบเพลิงให้แสงสว่างแรงแต่ดึงดูดความสนใจได้ง่าย",
+            "water_bottle" => "ขวดน้ำดื่ม ใช้เพิ่มค่าน้ำเมื่อดื่ม",
+            "water_filter" => "เครื่องกรองน้ำ ช่วยทำให้น้ำสกปรกปลอดภัยขึ้นก่อนดื่ม",
+            "whistle" => "นกหวีดสำหรับส่งสัญญาณเสียงดัง ใช้เรียกคนหรือเบี่ยงเบนความสนใจ",
+            "wrench" => "ประแจสำหรับขันน็อต ซ่อมอุปกรณ์ หรือใช้เป็นอาวุธฉุกเฉิน",
+            _ => "ไอเทมเอาตัวรอดที่พบจากเหตุการณ์"
         };
     }
 
