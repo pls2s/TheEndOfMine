@@ -62,8 +62,63 @@
                                  BackgroundColor="Transparent"
                                  Clicked="OnInventoryClicked" />
                     <Label Text="INVENTORY" TextColor="White" FontSize="10" HorizontalOptions="Center" />
+
+                    <Button Text="☰"
+                            Clicked="OnGameMenuClicked"
+                            WidthRequest="46"
+                            HeightRequest="38"
+                            Margin="0,8,0,0"
+                            BackgroundColor="#AA191715"
+                            BorderColor="#D8B45F"
+                            BorderWidth="1"
+                            TextColor="#EFE8D8"
+                            FontSize="20"
+                            FontAttributes="Bold"
+                            CornerRadius="8"
+                            Padding="0" />
                 </VerticalStackLayout>
             </Grid>
+
+            <Border x:Name="GameMenuPanel"
+                    Grid.Row="0"
+                    IsVisible="False"
+                    Opacity="0"
+                    TranslationY="-8"
+                    HorizontalOptions="End"
+                    VerticalOptions="Start"
+                    Margin="0,106,0,0"
+                    Padding="10"
+                    BackgroundColor="#EE151310"
+                    Stroke="#D8B45F"
+                    StrokeThickness="1.2"
+                    ZIndex="20">
+                <Border.StrokeShape>
+                    <RoundRectangle CornerRadius="10" />
+                </Border.StrokeShape>
+
+                <VerticalStackLayout Spacing="8" WidthRequest="118">
+                    <Button Text="{Binding StopButtonText}"
+                            Clicked="OnStopClicked"
+                            BackgroundColor="#241F19"
+                            BorderColor="#4E493F"
+                            BorderWidth="1"
+                            TextColor="#EFE8D8"
+                            FontSize="12"
+                            FontAttributes="Bold"
+                            CornerRadius="7"
+                            Padding="10,8" />
+
+                    <Button x:Name="SaveGameButton"
+                            Text="SAVE GAME"
+                            Clicked="OnSaveGameClicked"
+                            BackgroundColor="#D8B45F"
+                            TextColor="#111111"
+                            FontSize="11"
+                            FontAttributes="Bold"
+                            CornerRadius="7"
+                            Padding="10,8" />
+                </VerticalStackLayout>
+            </Border>
 
             <!-- ส่วนกลาง: ปุ่มบนฉาก (ประตู / เตียง) -->
             <AbsoluteLayout Grid.Row="1" HorizontalOptions="Fill" VerticalOptions="Fill">

@@ -122,12 +122,68 @@ public partial class MainPage : ContentPage
     private async void OnInventoryClicked(object sender, EventArgs e)
     {
         AudioFeedbackService.PlayButtonTap();
+        await HideGameMenuAsync();
         await Navigation.PushAsync(new InventoryPage());
+    }
+
+    private async void OnGameMenuClicked(object sender, EventArgs e)
+    {
+        AudioFeedbackService.PlayButtonTap();
+
+        if (GameMenuPanel.IsVisible)
+            await HideGameMenuAsync();
+        else
+            await ShowGameMenuAsync();
+    }
+
+    private async void OnStopClicked(object sender, EventArgs e)
+    {
+        AudioFeedbackService.PlayButtonTap();
+        await _vm.ToggleStopAsync();
+        await HideGameMenuAsync();
+    }
+
+    private async void OnSaveGameClicked(object sender, EventArgs e)
+    {
+        AudioFeedbackService.PlayButtonTap();
+        SaveGameButton.IsEnabled = false;
+        await _vm.SaveGameAsync();
+        SaveGameButton.Text = "SAVED";
+        await SaveGameButton.ScaleTo(0.94, 70, Easing.CubicIn);
+        await SaveGameButton.ScaleTo(1, 90, Easing.CubicOut);
+        await Task.Delay(650);
+        SaveGameButton.Text = "SAVE GAME";
+        SaveGameButton.IsEnabled = true;
+        await HideGameMenuAsync();
     }
 
     private void OnGoOutsideClicked(object sender, EventArgs e)
     {
         AudioFeedbackService.PlayButtonTap();
+        _ = HideGameMenuAsync();
+    }
+
+    private async Task ShowGameMenuAsync()
+    {
+        GameMenuPanel.IsVisible = true;
+        GameMenuPanel.Opacity = 0;
+        GameMenuPanel.TranslationY = -8;
+
+        await Task.WhenAll(
+            GameMenuPanel.FadeTo(1, 120, Easing.CubicOut),
+            GameMenuPanel.TranslateTo(0, 0, 120, Easing.CubicOut));
+    }
+
+    private async Task HideGameMenuAsync()
+    {
+        if (!GameMenuPanel.IsVisible)
+            return;
+
+        await Task.WhenAll(
+            GameMenuPanel.FadeTo(0, 90, Easing.CubicIn),
+            GameMenuPanel.TranslateTo(0, -8, 90, Easing.CubicIn));
+
+        GameMenuPanel.IsVisible = false;
     }
 
     private void ConfirmRest(int hours)

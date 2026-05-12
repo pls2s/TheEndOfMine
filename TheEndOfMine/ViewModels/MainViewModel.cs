@@ -28,6 +28,7 @@ public class MainViewModel : INotifyPropertyChanged
     private string _chapterLoadingTitle = "ENTERING CHAPTER";
     private string _chapterLoadingDetail = "กำลังเตรียม chapter ถัดไป";
     private string _chapterLoadingImage = "story/chapter/chapter_ruined_city_sunset.png";
+    private CancellationTokenSource? _chapterLoadingPulseCts;
 
     public MainViewModel()
     {
@@ -55,6 +56,8 @@ public class MainViewModel : INotifyPropertyChanged
     public ICommand RestCommand { get; }
 
     public bool CanGoOutside => !IsActionBusy && !_isEventPopupOpen && _engine?.CurrentState?.Status == GameStatus.Running;
+    public bool IsPaused => _engine?.CurrentState?.Status == GameStatus.Paused;
+    public string StopButtonText => IsPaused ? "RESUME" : "STOP";
 
     public bool IsActionBusy
     {
@@ -71,6 +74,32 @@ public class MainViewModel : INotifyPropertyChanged
     }
 
     public string GoOutsideButtonText => IsActionBusy ? "LOADING..." : "GO OUTSIDE";
+
+    public async Task SaveGameAsync()
+    {
+        if (_engine?.CurrentState == null)
+            return;
+
+        _engine.SaveCheckpoint();
+        await SaveGameDatabaseAsync(_engine.CurrentState);
+    }
+
+    public async Task ToggleStopAsync()
+    {
+        if (_engine?.CurrentState == null)
+            return;
+
+        if (_engine.CurrentState.Status == GameStatus.Paused)
+            _engine.ResumeGame();
+        else if (_engine.CurrentState.Status == GameStatus.Running)
+            _engine.PauseGame();
+
+        await SaveGameAsync();
+        Raise(nameof(IsPaused));
+        Raise(nameof(StopButtonText));
+        Raise(nameof(CanGoOutside));
+        _goOutsideCommand.ChangeCanExecute();
+    }
 
     public bool IsChapterLoading
     {
@@ -277,19 +306,28 @@ public class MainViewModel : INotifyPropertyChanged
         try
         {
             if (isChapterTransition)
+            {
                 await ShowChapterLoadingAsync(_engine.CurrentState!);
+                StartChapterLoadingPulse();
+            }
 
             await _engine.GoOutsideAsync();
             if (_engine.CurrentState != null)
                 await SaveGameDatabaseAsync(_engine.CurrentState);
 
             if (isChapterTransition)
+            {
+                StopChapterLoadingPulse();
                 await CompleteChapterLoadingAsync(_engine.CurrentState);
+            }
         }
         finally
         {
             if (isChapterTransition)
+            {
+                StopChapterLoadingPulse();
                 await HideChapterLoadingAsync();
+            }
 
             IsActionBusy = false;
         }
@@ -338,6 +376,8 @@ public class MainViewModel : INotifyPropertyChanged
         Raise(nameof(SurvivorImage));
         Raise(nameof(BackgroundImage));
         Raise(nameof(CanGoOutside));
+        Raise(nameof(IsPaused));
+        Raise(nameof(StopButtonText));
         _goOutsideCommand.ChangeCanExecute();
     }
 
@@ -357,7 +397,7 @@ public class MainViewModel : INotifyPropertyChanged
                     ?? Application.Current?.Windows.FirstOrDefault()?.Page?.Navigation;
                 if (navigation == null) return;
 
-                await navigation.PushAsync(new GameOverPage());
+                await navigation.PushAsync(new GameOverPage(_engine?.CurrentState));
             }
             catch { }
         });
@@ -382,7 +422,7 @@ public class MainViewModel : INotifyPropertyChanged
         IsChapterLoading = true;
 
         await SetChapterLoadingProgressAsync(0.16, "กำลังสรุปผลจาก chapter ก่อนหน้า");
-        await SetChapterLoadingProgressAsync(0.34, "กำลังสร้างเหตุการณ์ชุดใหม่");
+        await SetChapterLoadingProgressAsync(0.31, "กำลังสร้างเหตุการณ์ชุดใหม่");
     }
 
     private async Task CompleteChapterLoadingAsync(GameState? state)
@@ -401,6 +441,62 @@ public class MainViewModel : INotifyPropertyChanged
         await SetChapterLoadingProgressAsync(0.82, "กำลังจัดฉากและบันทึก checkpoint");
         await SetChapterLoadingProgressAsync(1, "พร้อมเข้าสู่ chapter ใหม่");
         await Task.Delay(220);
+    }
+
+    private void StartChapterLoadingPulse()
+    {
+        StopChapterLoadingPulse();
+
+        _chapterLoadingPulseCts = new CancellationTokenSource();
+        var token = _chapterLoadingPulseCts.Token;
+
+        _ = Task.Run(async () =>
+        {
+            var details = new[]
+            {
+                "กำลังเขียนเหตุการณ์ให้ต่อเนื่องกับเรื่องเดิม",
+                "กำลังตรวจไอเทมและผลลัพธ์ของแต่ละทางเลือก",
+                "กำลังเลือกฉากและรูป chapter ถัดไป",
+                "กำลังจัดสมดุลเวลา ค่าสถานะ และความเสี่ยง",
+                "กำลังตรวจความต่อเนื่องก่อนเข้า chapter ใหม่"
+            };
+
+            var index = 0;
+            while (!token.IsCancellationRequested)
+            {
+                await MainThread.InvokeOnMainThreadAsync(() =>
+                {
+                    if (ChapterLoadingProgress < 0.88)
+                    {
+                        var step = ChapterLoadingProgress < 0.62 ? 0.025 : 0.009;
+                        ChapterLoadingProgress = Math.Min(0.88, ChapterLoadingProgress + step);
+                    }
+
+                    ChapterLoadingDetail = details[index % details.Length];
+                });
+
+                index++;
+
+                try
+                {
+                    await Task.Delay(520, token);
+                }
+                catch (TaskCanceledException)
+                {
+                    break;
+                }
+            }
+        }, token);
+    }
+
+    private void StopChapterLoadingPulse()
+    {
+        if (_chapterLoadingPulseCts == null)
+            return;
+
+        _chapterLoadingPulseCts.Cancel();
+        _chapterLoadingPulseCts.Dispose();
+        _chapterLoadingPulseCts = null;
     }
 
     private async Task SetChapterLoadingProgressAsync(double progress, string detail)
