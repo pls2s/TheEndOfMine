@@ -41,6 +41,12 @@ public class GameEvent
     [JsonPropertyName("description")]
     public string Description { get; set; } = string.Empty;
 
+    [JsonPropertyName("story_alias")]
+    public string? StoryAlias { get; set; }
+
+    [JsonPropertyName("image_alias")]
+    public string? ImageAlias { get; set; }
+
     [JsonPropertyName("imagePrompt")]
     public string ImagePrompt { get; set; } = string.Empty;
 

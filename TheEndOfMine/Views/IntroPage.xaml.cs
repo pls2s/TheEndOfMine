@@ -9,6 +9,8 @@ namespace TheEndOfMine.Views;
 public partial class IntroPage : ContentPage
 {
     private Gender _selected = Gender.Female; // เริ่มต้นที่ผู้หญิง
+    private bool _isStarting;
+    private TaskCompletionSource<bool>? _alertCompletion;
 
     public IntroPage()
     {
@@ -27,6 +29,8 @@ public partial class IntroPage : ContentPage
 
     private async void OnTapToStartClicked(object sender, EventArgs e)
     {
+        AudioFeedbackService.PlayButtonTap();
+
         var btn = (Button)sender;
         btn.IsEnabled = false;
 
@@ -50,6 +54,7 @@ public partial class IntroPage : ContentPage
     private async void OnMaleClicked(object sender, EventArgs e)
     {
         if (_selected == Gender.Male) return;
+        AudioFeedbackService.PlayButtonTap();
         await ChangeCharacterWithFade(Gender.Male);
     }
 
@@ -57,6 +62,7 @@ public partial class IntroPage : ContentPage
     private async void OnFemaleClicked(object sender, EventArgs e)
     {
         if (_selected == Gender.Female) return;
+        AudioFeedbackService.PlayButtonTap();
         await ChangeCharacterWithFade(Gender.Female);
     }
 
@@ -76,24 +82,39 @@ public partial class IntroPage : ContentPage
 
     private async void OnStartClicked(object sender, EventArgs e)
     {
+        if (_isStarting) return;
+
+        AudioFeedbackService.PlayButtonTap();
+
         var startButton = sender as Button;
         if (startButton != null) startButton.IsEnabled = false;
 
         var name = NameEntry.Text?.Trim();
         if (string.IsNullOrWhiteSpace(name))
         {
-            await DisplayAlert("ต้องใส่ชื่อ", "กรุณาใส่ชื่อผู้รอดชีวิต", "ตกลง");
+            await ShowGameAlertAsync("ต้องใส่ชื่อ", "กรุณาใส่ชื่อผู้รอดชีวิต");
             if (startButton != null) startButton.IsEnabled = true;
             return;
         }
 
         try
         {
+            _isStarting = true;
+            await ShowStartLoadingAsync(GetCharacterImagePath(_selected, "loading"));
+            await SetStartLoadingProgressAsync(0.08, "บันทึกชื่อผู้รอดชีวิต");
+
             // 1. สร้างข้อมูลตัวละครใหม่และดึงค่าเพศ _selected
             var survivor = new Survivor { Name = name, Gender = _selected };
             var contentGenerator = new LlmGameContentService();
-            var generatedContent = await contentGenerator.GenerateNewGameAsync(survivor);
 
+            await SetStartLoadingProgressAsync(0.18, "กำลังสร้าง Chapter 1 และเหตุการณ์เริ่มต้น");
+            var generatedContent = await contentGenerator.GenerateNewGameAsync(survivor);
+            await SetStartLoadingProgressAsync(
+                0.68,
+                "สร้างบทแรกเสร็จแล้ว กำลังจัดฉาก",
+                generatedContent.ChapterImagePath);
+
+            await SetStartLoadingProgressAsync(0.78, "กำลังเตรียมไอเทมเริ่มต้น");
             var inv = new Inventory();
             foreach (var item in generatedContent.StartingItems)
                 inv.AddItem(item);
@@ -107,10 +128,12 @@ public partial class IntroPage : ContentPage
                 Difficulty = Difficulty.Normal,
                 Status = GameStatus.Running,
                 DayCount = 1,
-                GameMinute = 8 * 60, // 08:00 AM
+                GameMinute = 0,
                 EventIndex = 0,
                 StoryTitle = generatedContent.StoryTitle,
                 CurrentChapterTitle = generatedContent.StoryTitle,
+                CurrentChapterAlias = generatedContent.ChapterAlias ?? string.Empty,
+                CurrentChapterImagePath = generatedContent.ChapterImagePath,
                 CurrentChapter = 1,
                 MaxChapters = 4,
                 EventsPerChapter = 8,
@@ -119,24 +142,105 @@ public partial class IntroPage : ContentPage
             };
 
             // 3. บันทึกข้อมูลรอบใหม่ลง GameDatabase
+            await SetStartLoadingProgressAsync(0.9, "กำลังบันทึกเกม");
+            new SaveService().DeleteAllSaves();
             var db = new TheEndOfMine.Data.GameDatabase();
             await db.SaveAsync(survivor, state, inv);
 
             if (!generatedContent.UsedRemoteLlm)
             {
-                await DisplayAlert(
-                    "ยังไม่ได้ตั้งค่า GPT",
-                    "ยังไม่พบ OPENAI_API_KEY หรือ LLM_API_KEY ระบบจึงสร้างเนื้อเรื่อง fallback แบบสุ่มให้ก่อน",
-                    "ตกลง");
+                var reason = string.IsNullOrWhiteSpace(generatedContent.FallbackReason)
+                    ? "ระบบเรียก LLM ไม่สำเร็จ จึงสร้างเนื้อเรื่อง fallback แบบสุ่มให้ก่อน"
+                    : generatedContent.FallbackReason;
+
+                await ShowGameAlertAsync(
+                    "ใช้เนื้อเรื่อง fallback",
+                    $"{reason}\nระบบจึงสร้างเนื้อเรื่อง fallback แบบสุ่มให้ก่อน");
             }
 
             // 4. ไปหน้าเลือกความยาก
+            await SetStartLoadingProgressAsync(1, "พร้อมเข้าสู่เหมืองสุดท้าย");
+            await Task.Delay(200);
             await Navigation.PushAsync(new DifficultyPage());
+            await HideStartLoadingAsync();
+        }
+        catch
+        {
+            await HideStartLoadingAsync();
+            await ShowGameAlertAsync("โหลดไม่สำเร็จ", "สร้างเกมใหม่ไม่สำเร็จ กรุณาลองอีกครั้ง");
         }
         finally
         {
+            _isStarting = false;
             if (startButton != null) startButton.IsEnabled = true;
         }
+    }
+
+    private async Task ShowStartLoadingAsync(string imageSource)
+    {
+        StartLoadingImage.Source = imageSource;
+        StartLoadingTitleLabel.Text = "กำลังสร้างโลก";
+        StartLoadingDetailLabel.Text = "กำลังเตรียมบทแรก";
+        StartLoadingProgress.Progress = 0;
+        StartLoadingPercentLabel.Text = "0%";
+        StartLoadingOverlay.IsVisible = true;
+        StartLoadingOverlay.InputTransparent = false;
+        StartLoadingOverlay.Opacity = 0;
+        await StartLoadingOverlay.FadeTo(1, 220, Easing.CubicOut);
+    }
+
+    private async Task SetStartLoadingProgressAsync(double progress, string detail, string? imageSource = null)
+    {
+        if (!string.IsNullOrWhiteSpace(imageSource))
+            StartLoadingImage.Source = imageSource;
+
+        progress = Math.Clamp(progress, 0, 1);
+        StartLoadingDetailLabel.Text = detail;
+        StartLoadingPercentLabel.Text = $"{(int)Math.Round(progress * 100)}%";
+        await StartLoadingProgress.ProgressTo(progress, 260, Easing.CubicOut);
+    }
+
+    private async Task HideStartLoadingAsync()
+    {
+        if (!StartLoadingOverlay.IsVisible) return;
+
+        await StartLoadingOverlay.FadeTo(0, 180, Easing.CubicIn);
+        StartLoadingOverlay.IsVisible = false;
+        StartLoadingOverlay.InputTransparent = true;
+    }
+
+    private async Task ShowGameAlertAsync(string title, string message)
+    {
+        if (_alertCompletion != null)
+            return;
+
+        _alertCompletion = new TaskCompletionSource<bool>();
+        GameAlertTitleLabel.Text = title;
+        GameAlertMessageLabel.Text = message;
+        GameAlertOkButton.IsEnabled = true;
+        GameAlertOverlay.IsVisible = true;
+        GameAlertOverlay.InputTransparent = false;
+        GameAlertOverlay.Opacity = 0;
+
+        await GameAlertOverlay.FadeTo(1, 160, Easing.CubicOut);
+        await _alertCompletion.Task;
+    }
+
+    private async void OnGameAlertOkClicked(object sender, EventArgs e)
+    {
+        AudioFeedbackService.PlayButtonTap();
+
+        if (_alertCompletion == null)
+            return;
+
+        GameAlertOkButton.IsEnabled = false;
+        await GameAlertOverlay.FadeTo(0, 120, Easing.CubicIn);
+        GameAlertOverlay.IsVisible = false;
+        GameAlertOverlay.InputTransparent = true;
+
+        var completion = _alertCompletion;
+        _alertCompletion = null;
+        completion.TrySetResult(true);
     }
 
     private static string GetCharacterImagePath(Gender gender, string kind)

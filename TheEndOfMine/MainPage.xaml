@@ -26,36 +26,50 @@
             <!-- ส่วนบน: Status & Inventory -->
             <Grid Grid.Row="0" ColumnDefinitions="*, Auto">
                 <Frame Grid.Column="0" BackgroundColor="#88000000" BorderColor="#555555" Padding="10" CornerRadius="5" HorizontalOptions="Start">
-                    <VerticalStackLayout Spacing="5" WidthRequest="150">
-                        <Grid ColumnDefinitions="25, *">
-                            <Image Source="story/ui/ui_hp_icon.png" WidthRequest="18" BackgroundColor="Transparent" />
+                    <VerticalStackLayout Spacing="6" WidthRequest="168">
+                        <Grid ColumnDefinitions="44, *" ColumnSpacing="8">
+                            <Image Source="story/ui/ui_hp_icon.png" WidthRequest="42" HeightRequest="28" Aspect="AspectFit" HorizontalOptions="Center" VerticalOptions="Center" BackgroundColor="Transparent" />
                             <ProgressBar Grid.Column="1" Progress="{Binding HPProgress}" ProgressColor="#CC3333" BackgroundColor="#333333" />
                         </Grid>
-                        <Grid ColumnDefinitions="25, *">
-                            <Image Source="story/ui/ui_food_icon.png" WidthRequest="18" BackgroundColor="Transparent" />
+                        <Grid ColumnDefinitions="44, *" ColumnSpacing="8">
+                            <Image Source="story/ui/ui_food_icon.png" WidthRequest="42" HeightRequest="28" Aspect="AspectFit" HorizontalOptions="Center" VerticalOptions="Center" BackgroundColor="Transparent" />
                             <ProgressBar Grid.Column="1" Progress="{Binding HungerProgress}" ProgressColor="#D4A017" BackgroundColor="#333333" />
                         </Grid>
-                        <Grid ColumnDefinitions="25, *">
-                            <Image Source="story/ui/ui_water_icon.png" WidthRequest="18" BackgroundColor="Transparent" />
+                        <Grid ColumnDefinitions="44, *" ColumnSpacing="8">
+                            <Image Source="story/ui/ui_water_icon.png" WidthRequest="42" HeightRequest="28" Aspect="AspectFit" HorizontalOptions="Center" VerticalOptions="Center" BackgroundColor="Transparent" />
                             <ProgressBar Grid.Column="1" Progress="{Binding ThirstProgress}" ProgressColor="#3399CC" BackgroundColor="#333333" />
                         </Grid>
-                        <Grid ColumnDefinitions="25, *">
-                            <Image Source="story/ui/ui_stamina_icon.png" WidthRequest="18" BackgroundColor="Transparent" />
+                        <Grid ColumnDefinitions="44, *" ColumnSpacing="8">
+                            <Image Source="story/ui/ui_stamina_icon.png" WidthRequest="42" HeightRequest="28" Aspect="AspectFit" HorizontalOptions="Center" VerticalOptions="Center" BackgroundColor="Transparent" />
                             <ProgressBar Grid.Column="1" Progress="{Binding FatigueProgress}" ProgressColor="#888888" BackgroundColor="#333333" />
                         </Grid>
+                        <Grid ColumnDefinitions="44, *" ColumnSpacing="8">
+                            <Label Text="!" FontSize="22" TextColor="#E67E22" FontAttributes="Bold" HorizontalOptions="Center" VerticalOptions="Center" />
+                            <ProgressBar Grid.Column="1" Progress="{Binding NoiseProgress}" ProgressColor="#E67E22" BackgroundColor="#333333" />
+                        </Grid>
+                        <Grid ColumnDefinitions="44, *" ColumnSpacing="8">
+                            <Label Text="+" FontSize="22" TextColor="#8F6AD8" FontAttributes="Bold" HorizontalOptions="Center" VerticalOptions="Center" />
+                            <ProgressBar Grid.Column="1" Progress="{Binding InfectionProgress}" ProgressColor="#8F6AD8" BackgroundColor="#333333" />
+                        </Grid>
+                        <Label Text="{Binding SurvivalPressureDisplay}" TextColor="#AFA694" FontSize="10" HorizontalOptions="Center" />
                     </VerticalStackLayout>
                 </Frame>
 
                 <VerticalStackLayout Grid.Column="1" Spacing="2" HorizontalOptions="End">
-                    <ImageButton Source="story/ui/ui_inventory_button.png" WidthRequest="60" HeightRequest="60" BackgroundColor="Transparent" />
+                    <ImageButton Source="story/ui/ui_inventory_button.png"
+                                 WidthRequest="60"
+                                 HeightRequest="60"
+                                 BackgroundColor="Transparent"
+                                 Clicked="OnInventoryClicked" />
                     <Label Text="INVENTORY" TextColor="White" FontSize="10" HorizontalOptions="Center" />
                 </VerticalStackLayout>
             </Grid>
 
             <!-- ส่วนกลาง: ปุ่มบนฉาก (ประตู / เตียง) -->
             <AbsoluteLayout Grid.Row="1" HorizontalOptions="Fill" VerticalOptions="Fill">
-                <Button Text="GO OUTSIDE" 
+                <Button Text="{Binding GoOutsideButtonText}"
                     Command="{Binding GoOutsideCommand}"
+                    Clicked="OnGoOutsideClicked"
                     AbsoluteLayout.LayoutBounds="0.0001, 0.4, 110, 45"
                     AbsoluteLayout.LayoutFlags="PositionProportional"
                     BackgroundColor="#88000000" TextColor="White" BorderColor="Gray" BorderWidth="1" CornerRadius="5" />
@@ -110,16 +124,105 @@
         </Grid>
         <!-- จบเลเยอร์ UI หลัก -->
 
-        <!-- ================= 3. เลเยอร์ Loading Overlay (ย้ายมาตรงนี้) ================= -->
-        <!-- นำออกมาไว้ข้างนอกสุด เพื่อไม่ให้ติด Padding ของ Grid ด้านบน -->
-        <Grid x:Name="LoadingOverlay" BackgroundColor="Black" IsVisible="True" ZIndex="999">
-            <VerticalStackLayout HorizontalOptions="Center" VerticalOptions="Center" Spacing="20">
-                <ActivityIndicator IsRunning="True" Color="#D4A017" WidthRequest="50" HeightRequest="50" />
-                <Label Text="ENTERING THE WORLD..." 
-                       TextColor="#D4A017" 
-                       FontSize="18" 
-                       FontAttributes="Bold" 
-                       HorizontalTextAlignment="Center"/>
+        <!-- ================= 3. Chapter Loading Overlay ================= -->
+        <Grid x:Name="LoadingOverlay"
+              BackgroundColor="#050505"
+              IsVisible="True"
+              ZIndex="999">
+            <Image x:Name="LoadingChapterImage"
+                   Source="story/chapter/chapter_ruined_city_sunset.png"
+                   Aspect="AspectFill"
+                   Opacity="0.72" />
+
+            <BoxView>
+                <BoxView.Background>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                        <GradientStop Color="#77000000" Offset="0" />
+                        <GradientStop Color="#CC000000" Offset="0.56" />
+                        <GradientStop Color="#FA000000" Offset="1" />
+                    </LinearGradientBrush>
+                </BoxView.Background>
+            </BoxView>
+
+            <VerticalStackLayout Padding="28"
+                                 Spacing="14"
+                                 VerticalOptions="End"
+                                 Margin="0,0,0,46">
+                <Label x:Name="LoadingTitleLabel"
+                       Text="ENTERING CHAPTER"
+                       TextColor="#D8B45F"
+                       FontSize="13"
+                       FontAttributes="Bold"
+                       CharacterSpacing="1.5" />
+
+                <Label x:Name="LoadingChapterLabel"
+                       Text="กำลังโหลดฉาก"
+                       TextColor="#EFE8D8"
+                       FontSize="25"
+                       FontAttributes="Bold"
+                       LineBreakMode="WordWrap" />
+
+                <Label x:Name="LoadingDetailLabel"
+                       Text="กำลังเตรียมข้อมูลเกม"
+                       TextColor="#AFA694"
+                       FontSize="13"
+                       LineBreakMode="WordWrap" />
+
+                <ProgressBar x:Name="LoadingProgress"
+                             Progress="0"
+                             ProgressColor="#D8B45F"
+                             BackgroundColor="#443E34" />
+
+                <Label x:Name="LoadingPercentLabel"
+                       Text="0%"
+                       TextColor="#AFA694"
+                       FontSize="12"
+                       HorizontalTextAlignment="End" />
+            </VerticalStackLayout>
+        </Grid>
+
+        <!-- ================= 4. Chapter Transition Overlay ================= -->
+        <Grid IsVisible="{Binding IsChapterLoading}"
+              BackgroundColor="#050505"
+              ZIndex="1000">
+            <Image Source="{Binding ChapterLoadingImage}"
+                   Aspect="AspectFill"
+                   Opacity="0.74" />
+
+            <BoxView>
+                <BoxView.Background>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                        <GradientStop Color="#66000000" Offset="0" />
+                        <GradientStop Color="#C9000000" Offset="0.52" />
+                        <GradientStop Color="#FB000000" Offset="1" />
+                    </LinearGradientBrush>
+                </BoxView.Background>
+            </BoxView>
+
+            <VerticalStackLayout Padding="28"
+                                 Spacing="14"
+                                 VerticalOptions="End"
+                                 Margin="0,0,0,46">
+                <Label Text="{Binding ChapterLoadingTitle}"
+                       TextColor="#D8B45F"
+                       FontSize="13"
+                       FontAttributes="Bold"
+                       CharacterSpacing="1.5" />
+
+                <Label Text="{Binding ChapterLoadingDetail}"
+                       TextColor="#EFE8D8"
+                       FontSize="25"
+                       FontAttributes="Bold"
+                       LineBreakMode="WordWrap" />
+
+                <ProgressBar Progress="{Binding ChapterLoadingProgress}"
+                             ProgressColor="#D8B45F"
+                             BackgroundColor="#443E34" />
+
+                <Label Text="{Binding ChapterLoadingPercentText}"
+                       TextColor="#AFA694"
+                       FontSize="12"
+                       HorizontalTextAlignment="End" />
             </VerticalStackLayout>
         </Grid>
 

@@ -2,11 +2,99 @@
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="TheEndOfMine.Views.EventPopup"
-             Title="EventPopup">
-    <VerticalStackLayout>
-        <Label 
-            Text="Welcome to .NET MAUI!"
-            VerticalOptions="Center" 
-            HorizontalOptions="Center" />
-    </VerticalStackLayout>
+             BackgroundColor="#050505"
+             NavigationPage.HasNavigationBar="False"
+             Shell.NavBarIsVisible="False">
+    <Grid RowDefinitions="*,Auto">
+        <Image x:Name="EventImage"
+               Grid.RowSpan="2"
+               Aspect="AspectFill"
+               Opacity="0.78" />
+
+        <BoxView Grid.RowSpan="2">
+            <BoxView.Background>
+                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                    <GradientStop Color="#22000000" Offset="0" />
+                    <GradientStop Color="#AA000000" Offset="0.52" />
+                    <GradientStop Color="#F3000000" Offset="1" />
+                </LinearGradientBrush>
+            </BoxView.Background>
+        </BoxView>
+
+        <ScrollView Grid.Row="1">
+            <VerticalStackLayout Padding="22,24,22,28" Spacing="14">
+                <Label x:Name="ChapterLabel"
+                       TextColor="#D8B45F"
+                       FontSize="12"
+                       FontAttributes="Bold"
+                       CharacterSpacing="1"
+                       LineBreakMode="TailTruncation" />
+
+                <Label x:Name="TitleLabel"
+                       TextColor="White"
+                       FontSize="24"
+                       FontAttributes="Bold"
+                       LineBreakMode="WordWrap" />
+
+                <Label x:Name="DescriptionLabel"
+                       TextColor="#E7E1D4"
+                       FontSize="15"
+                       LineHeight="1.25"
+                       LineBreakMode="WordWrap" />
+
+                <VerticalStackLayout x:Name="ChoicePanel"
+                                     Spacing="10"
+                                     Margin="0,8,0,0">
+                    <Button x:Name="ChoiceOneButton"
+                            Clicked="OnChoiceOneClicked"
+                            BackgroundColor="#DD161616"
+                            BorderColor="#776C58"
+                            BorderWidth="1"
+                            TextColor="White"
+                            FontSize="14"
+                            CornerRadius="6"
+                            Padding="14,12"
+                            LineBreakMode="WordWrap" />
+
+                    <Button x:Name="ChoiceTwoButton"
+                            Clicked="OnChoiceTwoClicked"
+                            BackgroundColor="#DD161616"
+                            BorderColor="#776C58"
+                            BorderWidth="1"
+                            TextColor="White"
+                            FontSize="14"
+                            CornerRadius="6"
+                            Padding="14,12"
+                            LineBreakMode="WordWrap" />
+                </VerticalStackLayout>
+
+                <VerticalStackLayout x:Name="ResultPanel"
+                                     IsVisible="False"
+                                     Spacing="12"
+                                     Margin="0,8,0,0">
+                    <Label x:Name="ResultLabel"
+                           TextColor="#F1E8D5"
+                           FontSize="15"
+                           LineHeight="1.25"
+                           LineBreakMode="WordWrap" />
+
+                    <Label x:Name="RewardLabel"
+                           TextColor="#D8B45F"
+                           FontSize="13"
+                           FontAttributes="Bold"
+                           IsVisible="False"
+                           LineBreakMode="WordWrap" />
+
+                    <Button Text="ไปต่อ"
+                            Clicked="OnContinueClicked"
+                            BackgroundColor="#D8B45F"
+                            TextColor="#111111"
+                            FontAttributes="Bold"
+                            FontSize="15"
+                            CornerRadius="6"
+                            Padding="14,12" />
+                </VerticalStackLayout>
+            </VerticalStackLayout>
+        </ScrollView>
+    </Grid>
 </ContentPage>

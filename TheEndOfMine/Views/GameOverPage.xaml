@@ -2,11 +2,50 @@
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="TheEndOfMine.Views.GameOverPage"
-             Title="GameOverPage">
-    <VerticalStackLayout>
-        <Label 
-            Text="Welcome to .NET MAUI!"
-            VerticalOptions="Center" 
-            HorizontalOptions="Center" />
-    </VerticalStackLayout>
+             BackgroundColor="#050505"
+             Shell.NavBarIsVisible="False"
+             NavigationPage.HasNavigationBar="False">
+    <Grid Padding="26">
+        <VerticalStackLayout Spacing="18"
+                             VerticalOptions="Center"
+                             HorizontalOptions="Center">
+            <Label Text="THE END OF MINE"
+                   TextColor="#D8B45F"
+                   FontSize="30"
+                   FontAttributes="Bold"
+                   HorizontalTextAlignment="Center" />
+
+            <Label Text="การเดินทางครั้งนี้จบลงแล้ว"
+                   TextColor="#EFE8D8"
+                   FontSize="18"
+                   HorizontalTextAlignment="Center" />
+
+            <Label x:Name="DeathDetailLabel"
+                   Text="ถ้าต้องการเริ่มใหม่ ให้กลับไปเลือกตัวละครอีกครั้ง"
+                   TextColor="#AFA694"
+                   FontSize="13"
+                   HorizontalTextAlignment="Center" />
+
+            <Button x:Name="RespawnButton"
+                    Text="กลับไปเริ่มวันนั้น"
+                    Clicked="OnRespawnClicked"
+                    IsVisible="False"
+                    BackgroundColor="#D8B45F"
+                    TextColor="#111111"
+                    FontAttributes="Bold"
+                    CornerRadius="8"
+                    Padding="16,12" />
+
+            <Button x:Name="HomeButton"
+                    Text="กลับหน้าเริ่มเกม"
+                    Clicked="OnHomeClicked"
+                    BackgroundColor="#191715"
+                    BorderColor="#4E493F"
+                    BorderWidth="1"
+                    TextColor="#EFE8D8"
+                    FontAttributes="Bold"
+                    CornerRadius="8"
+                    Padding="16,12" />
+        </VerticalStackLayout>
+    </Grid>
 </ContentPage>
