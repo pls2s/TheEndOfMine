@@ -2,6 +2,7 @@
 using Microsoft.Maui.Controls;
 using TheEndOfMine.Models;
 using TheEndOfMine.Data;
+using TheEndOfMine.Services;
 
 namespace TheEndOfMine.Views;
 
@@ -21,6 +22,8 @@ public partial class DifficultyPage : ContentPage
 
     private void SelectDifficulty(Difficulty difficulty)
     {
+        AudioFeedbackService.PlayButtonTap();
+
         _selectedDifficulty = difficulty;
         ConfirmBtn.IsVisible = true;
 
@@ -52,6 +55,8 @@ public partial class DifficultyPage : ContentPage
     private async void OnConfirmTapped(object sender, EventArgs e)
     {
         if (_selectedDifficulty == null) return;
+
+        AudioFeedbackService.PlayButtonTap();
 
         await ConfirmBtn.ScaleTo(0.93, 80, Easing.CubicIn);
         await ConfirmBtn.ScaleTo(1.0, 80, Easing.CubicOut);

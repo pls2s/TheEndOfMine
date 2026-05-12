@@ -25,11 +25,14 @@ public class LlmGameContentService
     - ห้ามครอบ JSON ด้วย markdown
     - ห้ามใส่คำอธิบาย คอมเมนต์ หรือ key นอก schema ที่กำหนด
     - ข้อความทุกอย่างที่ผู้เล่นเห็นต้องเป็นภาษาไทยธรรมชาติ
+    - ภาษาไทยต้องเหมือนคนไทยเขียนเอง ห้ามใช้สำนวนแปลตรงจากอังกฤษหรือประโยคแข็ง ๆ
+    - ตรวจคำผิดก่อนตอบ เช่น ใช้ "คนหนึ่ง" ไม่ใช่ "คนนึ่ง", ใช้ "ขอความช่วยเหลือ" ไม่ใช่ "ขอช่วยเหลือ"
     - โทนเรื่องต้องกดดัน สมจริง เน้นการเอาตัวรอด และมีทางเลือกที่ลำบากทางศีลธรรม
     - หลีกเลี่ยงแฟนตาซี เวทมนตร์ มุกตลก ซูเปอร์ฮีโร่ และฉากแอ็กชันทหารเกินจริง
     - ทุก event ต้องเป็นสถานการณ์ที่ผู้เล่นตัดสินใจได้ทันทีในเกม
     - ทุก choice ต้องมี tradeoff ที่มีความหมาย
     - ผลกระทบต่อทรัพยากรต้องสมดุล ห้ามทำให้ตัวเลือกหนึ่งดีกว่าอีกตัวเลือกแบบชัดเจนเสมอ
+    - hpEffect ที่เป็นบวกใช้ได้เฉพาะตัวเลือกที่ผู้เล่นกินอาหาร ดื่มน้ำ หรือรักษาแผล/ใช้ยาในเหตุการณ์นั้นจริง ๆ เท่านั้น
     - ไอเทมต้องเป็นของใช้เอาตัวรอดที่เข้ากับบริบทของเหตุการณ์
     - id ของไอเทมที่สร้างต้องเป็น lowercase snake_case และขึ้นต้นด้วย gen_
 
@@ -82,7 +85,12 @@ public class LlmGameContentService
         var assetCatalog = await _storyAssetResolver.LoadCatalogAsync(cancellationToken).ConfigureAwait(false);
         var settings = await LoadSettingsAsync(cancellationToken).ConfigureAwait(false);
         if (string.IsNullOrWhiteSpace(settings.ApiKey))
-            return CreateFallbackContent(survivor, chapterNumber, eventsPerChapter, assetCatalog);
+        {
+            var missingKeyMessage = settings.Provider == ProviderOpenAi
+                ? "ไม่พบ OPENAI_API_KEY หรือ LLM_API_KEY"
+                : "ไม่พบ TYPHOON_API_KEY หรือ LLM_API_KEY";
+            return CreateFallbackContent(survivor, chapterNumber, eventsPerChapter, assetCatalog, missingKeyMessage, state);
+        }
 
         try
         {
@@ -103,7 +111,7 @@ public class LlmGameContentService
             if (generated == null)
                 throw new InvalidOperationException("LLM response was empty.");
 
-            NormalizeContent(generated, survivor, eventsPerChapter, assetCatalog);
+            NormalizeContent(generated, survivor, eventsPerChapter, assetCatalog, state);
             await _imageGenerationService.GenerateChapterImagesAsync(
                 state ?? CreateImageState(survivor, chapterNumber, maxChapters, eventsPerChapter),
                 generated,
@@ -112,9 +120,15 @@ public class LlmGameContentService
             generated.UsedRemoteLlm = true;
             return generated;
         }
-        catch
+        catch (Exception ex)
         {
-            return CreateFallbackContent(survivor, chapterNumber, eventsPerChapter, assetCatalog);
+            return CreateFallbackContent(
+                survivor,
+                chapterNumber,
+                eventsPerChapter,
+                assetCatalog,
+                $"เรียก {settings.Provider} ไม่สำเร็จ: {ex.Message}",
+                state);
         }
     }
 
@@ -209,6 +223,8 @@ public class LlmGameContentService
         var currentStatus = state == null
             ? "เริ่มเกมใหม่ ยังไม่มีประวัติการเล่น"
             : BuildStateSummary(state);
+        var storyMemory = BuildStoryMemoryForPrompt(state);
+        var inventoryRules = BuildInventoryUseRules(state);
         var startingItemsRule = chapterNumber == 1
             ? "- สร้าง startingItems 3 ชิ้น"
             : "- startingItems ต้องเป็น array ว่าง [] เพราะไม่ใช่ chapter แรก";
@@ -224,11 +240,19 @@ public class LlmGameContentService
         Chapter: {{chapterNumber}}/{{maxChapters}}
         ธีมของ chapter นี้: {{phase}}
         สถานะเกมปัจจุบัน: {{currentStatus}}
+        ความทรงจำเนื้อเรื่องล่าสุด:
+        {{storyMemory}}
+        ไอเทมที่มีและวิธีใช้ที่สมเหตุผล:
+        {{inventoryRules}}
 
         {{assetAliasRules}}
 
         ข้อกำหนด:
         - ใช้ภาษาไทยสำหรับ storyTitle, title, description, choice text, resultText, ชื่อไอเทม และคำอธิบายไอเทม
+        - ภาษาไทยต้องลื่นและสมจริง หลีกเลี่ยงวลีแปลก เช่น "เสียงร้องขอช่วยเหลือ", "เปิดประตูด้วยเท้า", "มีดสนิม", "คนนึ่ง"
+        - ถ้าจะบอกว่ามีคนขอให้ช่วย ให้ใช้ "เสียงร้องขอความช่วยเหลือ" หรือ "เสียงคนร้องให้ช่วย"
+        - ถ้าจะเปิดประตูหรือฝาทางลง ให้ใช้ "ค่อย ๆ ผลักประตู", "ง้างฝา", "แง้มประตู" ตามบริบท ห้ามเขียนว่าเปิดด้วยเท้าเว้นแต่ตั้งใจเตะประตูจริง ๆ
+        - ใช้คำว่า "ร่าง" หรือ "ศพ" ให้เหมาะกับสถานการณ์ ห้ามเขียนประโยคสะดุด เช่น "ศพผู้หญิงคนนึ่ง"
         - storyTitle ให้เป็นชื่อ chapter นี้
         - chapter_alias ต้องเลือกจากรายการ chapter_alias ด้านบนให้เข้ากับบรรยากาศ chapter
         - สร้าง event ให้ครบ {{eventsPerChapter}} เหตุการณ์
@@ -236,13 +260,30 @@ public class LlmGameContentService
         - แต่ละ event ต้องมี choice 2 ตัวเลือกพอดี
         - แต่ละ choice ต้องมี id, text, hpEffect, hungerEffect, thirstEffect, fatigueEffect, resultText
         - ค่าผลกระทบตัวเลขต้องสมดุล และอยู่ระหว่าง -30 ถึง 30
+        - hpEffect > 0 ใช้ได้เฉพาะ choice ที่กินอาหาร ดื่มน้ำ หรือรักษา/ใช้ยาในทันทีเท่านั้น ห้ามเพิ่ม HP จากการพัก หลบ ซ่อน หรือแค่เจอไอเทม
+        - เกมมีระบบ Noise และ Infection แม้ schema ไม่มี field ตรง ๆ: ตัวเลือกที่ยิงปืน ทุบ งัด พัง กระจกแตก หรือตะโกนจะเพิ่ม Noise, ตัวเลือกที่โดนกัด แผลสกปรก เลือด สนิม ศพ น้ำเน่า หรือซากเน่าจะเพิ่ม Infection
+        - ถ้าผู้เล่น Noise สูง ให้เขียน event ที่ศัตรู/อันตรายถูกดึงดูดจากเสียงอย่างสมเหตุผล
+        - ถ้าผู้เล่น Infection สูง ให้เขียนอาการเช่นหนาวสั่น ไข้ แผลบวม มือสั่น หรือการตัดสินใจที่ยากขึ้น
+        - ตัวเลือกที่ใช้ยา ทำแผล พันแผล หรือปฐมพยาบาลต้องลดความเสี่ยงติดเชื้อใน resultText และห้ามรักษาหายทันทีแบบเวทมนตร์
         - ใส่ itemReward ให้ choice จำนวน 4 จุดพอดี โดย itemReward ต้องเป็น item object ครบถ้วน
         - ทุก itemReward และ startingItems ต้องมี story_alias ที่เลือกจากรายการ item.story_alias ด้านบน
+        - story_alias ของไอเทมต้องตรงกับชื่อและคำอธิบาย เช่น ชุดปฐมพยาบาลต้องใช้ first_aid_kit, ผ้าพันแผลต้องใช้ bandage, ขวดน้ำต้องใช้ water_bottle, อาหารกระป๋องต้องใช้ canned_food, ไฟฉายต้องใช้ flashlight
+        - ถ้า choice ให้ itemReward ต้องเขียน resultText ให้ระบุชื่อไอเทมนั้นตรง ๆ ห้ามเล่าอย่างหนึ่งแต่ให้ของอีกอย่าง
         - choice อื่นที่ไม่ได้ให้ไอเทมห้ามใส่ key itemReward
         - ทุก event ต้องมี imagePrompt เป็นภาษาอังกฤษ สำหรับสร้างภาพประกอบแบบ realistic gritty survival game art, no text, no UI, no logo
         - ทุก item ใน startingItems และ itemReward ต้องมี image_prompt เป็นภาษาอังกฤษ สำหรับสร้างภาพไอเทมเดี่ยวบนพื้นหลังเรียบ, no text, no logo
         {{startingItemsRule}}
         {{endingRule}}
+        - chapter นี้ต้องมีเป้าหมายหลักหนึ่งอย่างที่ชัดเจน และทุก event ต้องผลักผู้เล่นเข้าใกล้หรือไกลจากเป้าหมายนั้น
+        - เหตุการณ์ทั้งหมดต้องเรียงเป็นเหตุและผลต่อเนื่องกัน ไม่ใช่ฉากสุ่มคนละเรื่อง
+        - event ที่ 2 เป็นต้นไปต้องอ้างอิงผลจาก event ก่อนหน้า เช่น คนเดิม ร่องรอยเดิม สถานที่ต่อเนื่อง ไอเทม/เบาะแสที่เพิ่งได้ หรือผลเสียจากตัวเลือกก่อนหน้า
+        - ถ้ามี NPC ภัยคุกคาม หรือปริศนาสำคัญ ให้กลับมาอย่างน้อย 2 ครั้งใน chapter เพื่อให้รู้สึกเป็นเส้นเรื่องเดียวกัน
+        - resultText ของ choice ต้องทิ้งผลหรือเบาะแสที่ event ถัดไปใช้ต่อได้
+        - ห้ามรีเซ็ตสถานการณ์เหมือนไม่เคยเกิด event ก่อนหน้า และห้ามเริ่มทุก event ด้วยฉากใหม่ที่ไม่เกี่ยวกับเรื่องเดิม
+        - ถ้า choice ระบุว่า "ใช้ไอเทม" ต้องใช้ไอเทมที่ผู้เล่นมีจริง หรือไอเทมที่อยู่ในฉากนั้นอย่างชัดเจน และต้องใช้ตรงหน้าที่ของไอเทม
+        - ห้ามใช้ไอเทมผิดบริบท เช่น กระเป๋าเป้ใช้แบกของ/จัดของเท่านั้น ห้ามใช้เปิดทาง งัดประตู ตัดเหล็ก รักษาแผล กิน ดื่ม หรือโจมตี
+        - เครื่องมือเปิดทางต้องเป็นของที่เหมาะจริง เช่น ชะแลง มีด คีม ไขควง เชือก ไฟฉาย หรืออุปกรณ์ซ่อม โดยต้องอธิบายว่าใช้ทำอะไร
+        - ถ้าไม่มีไอเทมที่เหมาะ ให้เขียนเป็นการกระทำทั่วไป เช่น "ค่อย ๆ ลงไปตรวจ" หรือ "ถอยมาตั้งหลัก" แทนการฝืนใช้ไอเทม
         - โทนต้องกดดัน เน้นการเอาตัวรอด และแต่ละเหตุการณ์ต้องไม่ซ้ำอารมณ์กัน
 
         ตอบ JSON ตามรูปแบบนี้เท่านั้น:
@@ -305,9 +346,82 @@ public class LlmGameContentService
             .Select(i => string.IsNullOrWhiteSpace(i.NameTh) ? i.Id : i.NameTh);
 
         return $"HP {s.HP:0}, Hunger {s.Hunger:0}, Thirst {s.Thirst:0}, Fatigue {s.Fatigue:0}, " +
+               $"Noise {state.Noise:0}, Infection {state.Infection:0}, " +
                $"วันที่ {state.DayCount}, เวลา {state.Hour:D2}:{state.Minute:D2}, " +
                $"chapter ที่จบแล้ว: {string.Join(", ", state.CompletedChapterTitles)}, " +
-               $"ไอเทม: {string.Join(", ", items)}";
+               $"ไอเทม: {string.Join(", ", items)}, " +
+               $"เส้นเรื่อง: {(string.IsNullOrWhiteSpace(state.StoryArcSummary) ? "ยังไม่มี" : state.StoryArcSummary)}";
+    }
+
+    private static string BuildStoryMemoryForPrompt(GameState? state)
+    {
+        if (state == null)
+            return "ยังไม่มีเหตุการณ์ก่อนหน้า";
+
+        state.StoryMemory ??= new List<StoryMemoryEntry>();
+
+        if (state.StoryMemory.Count == 0 && string.IsNullOrWhiteSpace(state.StoryArcSummary))
+            return "ยังไม่มีเหตุการณ์ก่อนหน้า";
+
+        var lines = new List<string>();
+        if (!string.IsNullOrWhiteSpace(state.StoryArcSummary))
+            lines.Add($"สรุปเส้นเรื่อง: {state.StoryArcSummary}");
+
+        lines.AddRange(state.StoryMemory
+            .TakeLast(8)
+            .Select(memory => $"- บท {memory.Chapter} วันที่ {memory.Day} เวลา {memory.Time}: {memory.Summary}"));
+
+        return string.Join("\n", lines);
+    }
+
+    private static string BuildInventoryUseRules(GameState? state)
+    {
+        if (state == null)
+            return "เริ่มเกมใหม่: ถ้าจะใช้ไอเทมใน choice ต้องเป็น startingItems ที่สร้างให้ผู้เล่นหรือของที่อยู่ในฉากอย่างชัดเจน";
+
+        var items = state.Survivor.Inventory.GetItems().Take(12).ToList();
+        if (items.Count == 0)
+            return "ไม่มีไอเทมในกระเป๋า: ห้ามเขียน choice ที่อ้างว่าใช้ไอเทมส่วนตัว";
+
+        var lines = items.Select(item =>
+        {
+            var name = string.IsNullOrWhiteSpace(item.NameTh) ? item.Id : item.NameTh;
+            return $"- {name}: {DescribeReasonableItemUse(item)}";
+        });
+
+        return string.Join("\n", lines);
+    }
+
+    private static string DescribeReasonableItemUse(Item item)
+    {
+        var effects = item.Effects;
+        var category = item.Category.ToLowerInvariant();
+        var text = $"{item.Id} {item.NameTh} {item.NameEn} {item.Subcategory}".ToLowerInvariant();
+
+        if (effects?.IsContainer == true || text.Contains("backpack", StringComparison.Ordinal) || item.NameTh.Contains("กระเป๋า", StringComparison.Ordinal))
+            return "ใช้แบกของหรือจัดของเท่านั้น ห้ามใช้เปิดทาง งัด ต่อสู้ กิน ดื่ม หรือรักษา";
+        if (category == "food" || effects?.HungerRestore > 0)
+            return "กินเพื่อเพิ่มอาหารเท่านั้น";
+        if (category == "water" || effects?.ThirstRestore > 0)
+            return "ดื่มเพื่อเพิ่มน้ำเท่านั้น";
+        if (category == "medicine" || effects?.HpRestore > 0 || item.IsMedicalItem)
+            return "ใช้รักษาแผลหรือบรรเทาอาการบาดเจ็บ";
+        if (category == "weapon" || effects?.DmgMin > 0 || effects?.DmgMax > 0)
+            return "ใช้ป้องกันตัว ตัดเชือก หรือข่มขู่ในระยะที่สมเหตุผล";
+        if (effects?.IsLightSource == true)
+            return "ใช้ส่องทางในที่มืดหรือส่งสัญญาณระยะใกล้";
+        if (effects?.IsRope == true)
+            return "ใช้ปีน ผูก ดึง หรือข้ามช่องว่าง";
+        if (effects?.IsRepairMaterial == true || effects?.RepairAmount > 0)
+            return "ใช้ซ่อมอุปกรณ์หรือเสริมของที่เสีย";
+        if (effects?.IsGeneralTool == true || category == "tool")
+            return "ใช้แก้ปัญหาเชิงเครื่องมือ เช่น ไข งัด ตัด ซ่อม หรือเปิดฝาที่เหมาะกับชนิดของเครื่องมือ";
+        if (effects?.IsNavigation == true)
+            return "ใช้ดูทิศ วางแผนเส้นทาง หรือทำเครื่องหมาย";
+        if (effects?.IsCommunication == true || effects?.IsSignal == true)
+            return "ใช้สื่อสาร รับสัญญาณ หรือส่งสัญญาณ";
+
+        return "ใช้ได้เฉพาะตามคำอธิบายของไอเทม ห้ามฝืนใช้แทนเครื่องมือเฉพาะทาง";
     }
 
     private static string ExtractMessageContent(string responseJson)
@@ -369,7 +483,8 @@ public class LlmGameContentService
         GeneratedGameContent content,
         Survivor survivor,
         int eventsPerChapter,
-        StoryAssetCatalog assetCatalog)
+        StoryAssetCatalog assetCatalog,
+        GameState? state = null)
     {
         if (string.IsNullOrWhiteSpace(content.StoryTitle))
             content.StoryTitle = $"เส้นทางของ {survivor.Name}";
@@ -393,6 +508,7 @@ public class LlmGameContentService
         {
             var gameEvent = content.Events[i];
             gameEvent.Id = string.IsNullOrWhiteSpace(gameEvent.Id) ? $"evt_{i + 1:D2}" : gameEvent.Id;
+            ThaiNarrativeTextNormalizer.Normalize(gameEvent);
             gameEvent.StoryAlias = _storyAssetResolver.NormalizeAlias(
                 gameEvent.StoryAlias ?? gameEvent.ImageAlias,
                 assetCatalog.EventAliases,
@@ -417,23 +533,119 @@ public class LlmGameContentService
                 choice.ResultText = string.IsNullOrWhiteSpace(choice.ResultText)
                     ? "คุณรับผลจากการตัดสินใจนั้นและเดินหน้าต่อ"
                     : choice.ResultText;
+                NormalizeChoiceItemContext(choice);
+                EventChoiceInventoryGuard.Normalize(choice, GetAvailableChoiceItems(survivor, content, state));
+                choice.Text = ThaiNarrativeTextNormalizer.Normalize(choice.Text);
+                choice.ResultText = ThaiNarrativeTextNormalizer.Normalize(choice.ResultText);
 
                 if (choice.ItemReward != null)
                 {
                     NormalizeItem(choice.ItemReward, $"reward_{i + 1}_{c + 1}", assetCatalog);
+                    ItemRewardConsistencyService.Normalize(choice);
                     rewardCount++;
                     if (rewardCount > 5)
                         choice.ItemReward = null;
                 }
+
+                if (choice.HpEffect > 0 && !AllowsPositiveHpRecovery(choice))
+                    choice.HpEffect = 0;
             }
         }
 
         content.StartingItems = content.StartingItems.Take(3).ToList();
         for (var i = 0; i < content.StartingItems.Count; i++)
+        {
             NormalizeItem(content.StartingItems[i], $"start_{i + 1}", assetCatalog);
+            ItemRewardConsistencyService.Normalize(content.StartingItems[i]);
+        }
     }
 
     private static float ClampEffect(float value) => Math.Clamp(value, -30f, 30f);
+
+    private static void NormalizeChoiceItemContext(EventChoice choice)
+    {
+        if (!MentionsBackpack(choice.Text) && !MentionsBackpack(choice.ResultText))
+            return;
+
+        if (!LooksLikeInvalidBackpackUse(choice.Text) && !LooksLikeInvalidBackpackUse(choice.ResultText))
+            return;
+
+        choice.Text = ReplaceInvalidBackpackUse(choice.Text);
+        choice.ResultText = ReplaceInvalidBackpackUse(choice.ResultText);
+    }
+
+    private static bool MentionsBackpack(string text)
+    {
+        return text.Contains("กระเป๋าเป้", StringComparison.OrdinalIgnoreCase) ||
+               text.Contains("กระเป๋า", StringComparison.OrdinalIgnoreCase) ||
+               text.Contains("backpack", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool LooksLikeInvalidBackpackUse(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return false;
+
+        return text.Contains("เปิดทาง", StringComparison.OrdinalIgnoreCase) ||
+               text.Contains("เปิดประตู", StringComparison.OrdinalIgnoreCase) ||
+               text.Contains("งัด", StringComparison.OrdinalIgnoreCase) ||
+               text.Contains("ตัด", StringComparison.OrdinalIgnoreCase) ||
+               text.Contains("ฟัน", StringComparison.OrdinalIgnoreCase) ||
+               text.Contains("พัง", StringComparison.OrdinalIgnoreCase) ||
+               text.Contains("ขุด", StringComparison.OrdinalIgnoreCase) ||
+               text.Contains("โจมตี", StringComparison.OrdinalIgnoreCase) ||
+               text.Contains("รักษา", StringComparison.OrdinalIgnoreCase) ||
+               text.Contains("กิน", StringComparison.OrdinalIgnoreCase) ||
+               text.Contains("ดื่ม", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string ReplaceInvalidBackpackUse(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return text;
+
+        var normalized = text
+            .Replace("ใช้กระเป๋าเป้เปิดทาง", "ค่อย ๆ ตรวจทางลงไปดู", StringComparison.OrdinalIgnoreCase)
+            .Replace("ใช้กระเป๋าเปิดทาง", "ค่อย ๆ ตรวจทางลงไปดู", StringComparison.OrdinalIgnoreCase)
+            .Replace("ใช้ backpack เปิดทาง", "ค่อย ๆ ตรวจทางลงไปดู", StringComparison.OrdinalIgnoreCase)
+            .Replace("ใช้กระเป๋าเป้งัด", "ใช้มือคลำหาจุดเปิดอย่างระวัง", StringComparison.OrdinalIgnoreCase)
+            .Replace("ใช้กระเป๋างัด", "ใช้มือคลำหาจุดเปิดอย่างระวัง", StringComparison.OrdinalIgnoreCase);
+
+        if (LooksLikeInvalidBackpackUse(normalized))
+        {
+            normalized = normalized
+                .Replace("กระเป๋าเป้", "ความระมัดระวัง", StringComparison.OrdinalIgnoreCase)
+                .Replace("กระเป๋า", "ความระมัดระวัง", StringComparison.OrdinalIgnoreCase)
+                .Replace("backpack", "careful movement", StringComparison.OrdinalIgnoreCase);
+        }
+
+        return normalized;
+    }
+
+    private static bool AllowsPositiveHpRecovery(EventChoice choice)
+    {
+        if (choice.HungerEffect > 0 || choice.ThirstEffect > 0)
+            return true;
+
+        var text = $"{choice.Text} {choice.ResultText}".ToLowerInvariant();
+        return text.Contains("heal", StringComparison.Ordinal) ||
+               text.Contains("treat", StringComparison.Ordinal) ||
+               text.Contains("med", StringComparison.Ordinal) ||
+               text.Contains("medicine", StringComparison.Ordinal) ||
+               text.Contains("bandage", StringComparison.Ordinal) ||
+               text.Contains("first aid", StringComparison.Ordinal) ||
+               text.Contains("eat", StringComparison.Ordinal) ||
+               text.Contains("drink", StringComparison.Ordinal) ||
+               text.Contains("consume", StringComparison.Ordinal) ||
+               text.Contains("รักษา", StringComparison.Ordinal) ||
+               text.Contains("ทำแผล", StringComparison.Ordinal) ||
+               text.Contains("พันแผล", StringComparison.Ordinal) ||
+               text.Contains("ปฐมพยาบาล", StringComparison.Ordinal) ||
+               text.Contains("ยา", StringComparison.Ordinal) ||
+               text.Contains("ผ้าพันแผล", StringComparison.Ordinal) ||
+               text.Contains("กิน", StringComparison.Ordinal) ||
+               text.Contains("ดื่ม", StringComparison.Ordinal);
+    }
 
     private void NormalizeItem(Item item, string fallbackId, StoryAssetCatalog assetCatalog)
     {
@@ -447,7 +659,9 @@ public class LlmGameContentService
         item.TradeValue = item.TradeValue <= 0 ? 1 : item.TradeValue;
         item.MaxStack = item.MaxStack <= 0 ? 1 : item.MaxStack;
         item.FoundIn = item.FoundIn.Count == 0 ? new List<string> { "generated_story" } : item.FoundIn;
-        item.DurabilityMax ??= item.Durability ?? 1;
+        var isDurableGeneratedItem = item.Category.Equals("Tool", StringComparison.OrdinalIgnoreCase) ||
+                                     item.Category.Equals("Weapon", StringComparison.OrdinalIgnoreCase);
+        item.DurabilityMax ??= item.Durability ?? (isDurableGeneratedItem ? 3 : 1);
         item.Durability = item.DurabilityMax;
         item.DescriptionTh = string.IsNullOrWhiteSpace(item.DescriptionTh)
             ? "ไอเทมจากเรื่องราวที่ถูกสร้างใหม่"
@@ -460,51 +674,95 @@ public class LlmGameContentService
             assetCatalog.ItemAliases,
             $"{item.NameEn} {item.NameTh} {item.Id}");
         item.ImagePath = _storyAssetResolver.ResolveItemPath(item.StoryAlias, assetCatalog);
+        ItemRewardConsistencyService.Normalize(item);
     }
 
     private GeneratedGameContent CreateFallbackContent(
         Survivor survivor,
         int chapterNumber,
         int eventsPerChapter,
-        StoryAssetCatalog assetCatalog)
+        StoryAssetCatalog assetCatalog,
+        string fallbackReason = "",
+        GameState? state = null)
     {
         var seed = Guid.NewGuid().ToString("N")[..8];
-        var places = new[] { "โรงพยาบาลร้าง", "สถานีรถไฟใต้ดิน", "ตลาดกลางคืนที่ถูกทิ้ง", "ดาดฟ้าอพาร์ตเมนต์", "อุโมงค์ระบายน้ำ" };
-        var threats = new[] { "กลุ่มคนถืออาวุธ", "ฝูงผู้ติดเชื้อ", "ไฟไหม้ที่ลามช้าๆ", "พายุฝุ่นพิษ", "เสียงวิทยุปริศนา" };
+        var arcTitle = chapterNumber switch
+        {
+            1 => "เสียงวิทยุจากตึกฝั่งเหนือ",
+            2 => "ร่องรอยของคนที่ยังรอด",
+            3 => "แบตเตอรี่ก้อนสุดท้าย",
+            4 => "ทางออกก่อนเมืองปิดตาย",
+            _ => "เส้นทางที่ยังไม่จบ"
+        };
+        var objective = chapterNumber switch
+        {
+            1 => "หาต้นทางของสัญญาณวิทยุที่ดังซ้ำทุกคืน",
+            2 => "ตามรอยกลุ่มผู้รอดชีวิตที่ทิ้งสัญลักษณ์ไว้ตามกำแพง",
+            3 => "หาอะไหล่และแบตเตอรี่เพื่อส่งสัญญาณขอความช่วยเหลือ",
+            4 => "ตัดสินใจว่าจะไปจุดอพยพหรือช่วยคนที่ติดอยู่ในเมือง",
+            _ => "เอาตัวรอดจากผลของการตัดสินใจที่ผ่านมา"
+        };
+        var recurringThreat = chapterNumber switch
+        {
+            1 => "เสียงเคาะสามครั้งหลังประตูเหล็ก",
+            2 => "ชายผ้าพันแขนสีแดงที่ตามหลังมาเงียบๆ",
+            3 => "ไฟฉุกเฉินที่ติดดับเหมือนมีคนควบคุมอยู่",
+            4 => "เฮลิคอปเตอร์ที่บินวนแต่ไม่ยอมลงจอด",
+            _ => "เงาที่วนกลับมาในทุกจุดพัก"
+        };
+        var route = chapterNumber switch
+        {
+            1 => new[] { "ห้องพักเก่า", "โถงบันได", "ร้านชำชั้นล่าง", "คลินิกมุมถนน", "ห้องวิทยุบนดาดฟ้า", "สะพานลอยที่พังครึ่งหนึ่ง", "ป้อมยามร้าง", "ดาดฟ้าฝั่งเหนือ" },
+            2 => new[] { "ตลาดร้าง", "ซอยหลังร้านขายยา", "สถานีตำรวจ", "ลานจอดรถใต้ดิน", "บ้านที่มีสัญลักษณ์สีขาว", "โรงเรียนร้าง", "ทางลอดน้ำท่วม", "แคมป์ไฟที่เพิ่งดับ" },
+            3 => new[] { "โรงงานแบตเตอรี่", "ห้องควบคุมไฟ", "โกดังเครื่องมือ", "ทางเดินใต้ดิน", "ห้องพยาบาลเก่า", "เสาส่งสัญญาณ", "ดาดฟ้าโรงงาน", "ห้องเครื่องส่งวิทยุ" },
+            4 => new[] { "จุดตรวจทหารร้าง", "ถนนไป safe zone", "สะพานข้ามคลอง", "ค่ายผู้รอดชีวิต", "คลังเสบียง", "ทางเข้าเขตกักกัน", "ลานจอดเฮลิคอปเตอร์", "ประตูเมืองด้านเหนือ" },
+            _ => new[] { "ถนนเปลี่ยว", "อาคารร้าง", "ซอยมืด", "ดาดฟ้า", "อุโมงค์", "ลานจอดรถ", "คลินิกเก่า", "ทางออกเมือง" }
+        };
         var itemNames = new[] { "น้ำกรองขวดเล็ก", "ผ้าพันแผลสะอาด", "มีดพับขึ้นสนิม", "อาหารกระป๋องบุบ", "ไฟฉายมือหมุน", "ยาแก้ปวดเหลือครึ่งแผง" };
+        var previousThread = state?.StoryMemory?.LastOrDefault()?.Summary;
+        var openingThread = string.IsNullOrWhiteSpace(previousThread)
+            ? $"เป้าหมายตอนนี้คือ{objective}"
+            : $"จากเหตุการณ์ก่อนหน้า {previousThread} ทำให้เป้าหมายตอนนี้คือ{objective}";
 
         var events = new List<GameEvent>();
         for (var i = 0; i < eventsPerChapter; i++)
         {
-            var place = places[Random.Shared.Next(places.Length)];
-            var threat = threats[Random.Shared.Next(threats.Length)];
+            var place = route[i % route.Length];
+            var isFinalBeat = i == eventsPerChapter - 1;
+            var thread = i == 0
+                ? openingThread
+                : $"เบาะแสจากจุดก่อนพา {survivor.Name} มาถึง{place} และ{recurringThreat}ยังตามมาเหมือนเดิม";
+            var nextLead = isFinalBeat
+                ? "ทางเลือกนี้จะกำหนดว่าบทต่อไปเริ่มจากความหวังหรือหนี้ที่ต้องชดใช้"
+                : $"ร่องรอยใหม่ชี้ไปยัง{route[(i + 1) % route.Length]}";
+
             events.Add(new GameEvent
             {
                 Id = $"fallback_ch{chapterNumber}_{seed}_{i + 1:D2}",
-                Title = $"บทที่ {chapterNumber} - {place}: ทางเลือกที่ {i + 1}",
-                Description = $"{survivor.Name} พบ{place}ระหว่างออกสำรวจ แต่มี{threat}ขวางทางอยู่ ทุกวินาทีทำให้เสบียงลดลง",
+                Title = $"{arcTitle}: {place}",
+                Description = $"{thread}. ที่นี่มีร่องรอยของคนรอดชีวิตปะปนกับกับดักหยาบๆ ทุกอย่างบอกว่าใครบางคนอยากให้คุณเดินต่อ แต่ไม่อยากให้ไปถึงง่ายๆ",
                 Choices = new List<EventChoice>
                 {
                     new()
                     {
                         Id = "c1",
-                        Text = "เสี่ยงเข้าไปค้นหา",
+                        Text = "ตามร่องรอยต่อแม้ต้องเสี่ยง",
                         HpEffect = -Random.Shared.Next(0, 16),
                         HungerEffect = Random.Shared.Next(0, 18),
                         ThirstEffect = -Random.Shared.Next(0, 10),
                         FatigueEffect = Random.Shared.Next(8, 24),
-                        ResultText = "คุณได้บางอย่างติดมือมา แต่ร่างกายเริ่มรับภาระหนักขึ้น",
+                        ResultText = $"คุณฝ่าเข้าไปจนพบเบาะแสเพิ่มเกี่ยวกับ{objective} แต่เสียงของ{recurringThreat}ดังใกล้ขึ้น. {nextLead}",
                         ItemReward = i % 2 == 0 ? CreateFallbackItem(itemNames[Random.Shared.Next(itemNames.Length)], $"reward_{seed}_{i}") : null
                     },
                     new()
                     {
                         Id = "c2",
-                        Text = "เลี่ยงเส้นทางและประหยัดแรง",
-                        HpEffect = Random.Shared.Next(0, 8),
+                        Text = "อ้อมทางเพื่อรักษาชีวิตไว้ก่อน",
+                        HpEffect = 0,
                         HungerEffect = -Random.Shared.Next(0, 12),
                         ThirstEffect = -Random.Shared.Next(0, 12),
                         FatigueEffect = Random.Shared.Next(-10, 8),
-                        ResultText = "คุณเลือกความปลอดภัยไว้ก่อน แม้จะเสียโอกาสเก็บเสบียง"
+                        ResultText = $"คุณรอดจากความเสี่ยงตรงหน้า แต่เสียเวลาจนร่องรอยบางส่วนหายไป. ยังเหลือสัญญาณหนึ่งที่ชี้ไปยัง{route[(i + 1) % route.Length]}"
                     }
                 }
             });
@@ -512,7 +770,7 @@ public class LlmGameContentService
 
         var content = new GeneratedGameContent
         {
-            StoryTitle = $"บทที่ {chapterNumber}: คืนเอาตัวรอด {seed}",
+            StoryTitle = $"บทที่ {chapterNumber}: {arcTitle}",
             UsedRemoteLlm = false,
             Events = events,
             StartingItems = chapterNumber == 1 ? new List<Item>
@@ -523,9 +781,21 @@ public class LlmGameContentService
             } : new List<Item>()
         };
 
-        NormalizeContent(content, survivor, eventsPerChapter, assetCatalog);
+        NormalizeContent(content, survivor, eventsPerChapter, assetCatalog, state);
         content.UsedRemoteLlm = false;
+        content.FallbackReason = fallbackReason;
         return content;
+    }
+
+    private static IReadOnlyCollection<Item> GetAvailableChoiceItems(
+        Survivor survivor,
+        GeneratedGameContent content,
+        GameState? state)
+    {
+        var items = new List<Item>();
+        items.AddRange(state?.Survivor.Inventory.GetItems() ?? survivor.Inventory.GetItems());
+        items.AddRange(content.StartingItems);
+        return items;
     }
 
     private static Item CreateFallbackItem(string nameTh, string id)
@@ -534,6 +804,8 @@ public class LlmGameContentService
             nameTh.Contains("อาหาร", StringComparison.Ordinal) ? "Food" :
             nameTh.Contains("แผล", StringComparison.Ordinal) || nameTh.Contains("ยา", StringComparison.Ordinal) ? "Medicine" :
             nameTh.Contains("มีด", StringComparison.Ordinal) ? "Weapon" : "Tool";
+
+        var durability = category is "Tool" or "Weapon" ? 3 : 1;
 
         return new Item
         {
@@ -548,8 +820,8 @@ public class LlmGameContentService
             Stackable = false,
             MaxStack = 1,
             FoundIn = new List<string> { "generated_story" },
-            DurabilityMax = 1,
-            Durability = 1,
+            DurabilityMax = durability,
+            Durability = durability,
             Effects = new ItemEffects
             {
                 HpRestore = category == "Medicine" ? 15 : 0,

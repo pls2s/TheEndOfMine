@@ -59,5 +59,102 @@
             <Label x:Name="TapToStartLabel" Text="— TAP TO START —" TextColor="White" HorizontalOptions="Center" VerticalOptions="End" Margin="0,0,0,100" />
             <Button BackgroundColor="Transparent" HorizontalOptions="Fill" VerticalOptions="Fill" Clicked="OnTapToStartClicked" />
         </Grid>
+
+        <!-- 3. Loading หลังปุ่ม START -->
+        <Grid x:Name="StartLoadingOverlay"
+              BackgroundColor="#050505"
+              IsVisible="False"
+              Opacity="0"
+              ZIndex="20">
+            <Image x:Name="StartLoadingImage"
+                   Source="story/chapter/chapter_ruined_city_sunset.png"
+                   Aspect="AspectFill"
+                   Opacity="0.72" />
+
+            <BoxView>
+                <BoxView.Background>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                        <GradientStop Color="#77000000" Offset="0" />
+                        <GradientStop Color="#CC000000" Offset="0.58" />
+                        <GradientStop Color="#F8000000" Offset="1" />
+                    </LinearGradientBrush>
+                </BoxView.Background>
+            </BoxView>
+
+            <VerticalStackLayout Padding="28"
+                                 Spacing="14"
+                                 VerticalOptions="End"
+                                 Margin="0,0,0,46">
+                <Label x:Name="StartLoadingTitleLabel"
+                       Text="กำลังสร้างโลก"
+                       TextColor="#D8B45F"
+                       FontSize="26"
+                       FontAttributes="Bold" />
+
+                <Label x:Name="StartLoadingDetailLabel"
+                       Text="กำลังเตรียมบทแรก"
+                       TextColor="#EFE8D8"
+                       FontSize="14"
+                       LineBreakMode="WordWrap" />
+
+                <ProgressBar x:Name="StartLoadingProgress"
+                             Progress="0"
+                             ProgressColor="#D8B45F"
+                             BackgroundColor="#443E34" />
+
+                <Label x:Name="StartLoadingPercentLabel"
+                       Text="0%"
+                       TextColor="#AFA694"
+                       FontSize="12"
+                       HorizontalTextAlignment="End" />
+            </VerticalStackLayout>
+        </Grid>
+
+        <!-- 4. Custom game alert -->
+        <Grid x:Name="GameAlertOverlay"
+              IsVisible="False"
+              InputTransparent="True"
+              Opacity="0"
+              BackgroundColor="#CC000000"
+              Padding="26"
+              ZIndex="80">
+            <Border Padding="20"
+                    WidthRequest="330"
+                    HorizontalOptions="Center"
+                    VerticalOptions="Center"
+                    BackgroundColor="#151310"
+                    Stroke="#D8B45F"
+                    StrokeThickness="1.5">
+                <Border.StrokeShape>
+                    <RoundRectangle CornerRadius="12" />
+                </Border.StrokeShape>
+
+                <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="14">
+                    <Label x:Name="GameAlertTitleLabel"
+                           Text="แจ้งเตือน"
+                           TextColor="#D8B45F"
+                           FontSize="20"
+                           FontAttributes="Bold"
+                           CharacterSpacing="0.5" />
+
+                    <Label Grid.Row="1"
+                           x:Name="GameAlertMessageLabel"
+                           TextColor="#EFE8D8"
+                           FontSize="14"
+                           LineBreakMode="WordWrap"
+                           LineHeight="1.25" />
+
+                    <Button Grid.Row="2"
+                            x:Name="GameAlertOkButton"
+                            Text="ตกลง"
+                            Clicked="OnGameAlertOkClicked"
+                            BackgroundColor="#D8B45F"
+                            TextColor="#111111"
+                            FontAttributes="Bold"
+                            CornerRadius="7"
+                            Padding="14,10" />
+                </Grid>
+            </Border>
+        </Grid>
     </Grid>
 </ContentPage>

@@ -5,6 +5,7 @@
              BackgroundColor="#080807"
              NavigationPage.HasNavigationBar="False"
              Shell.NavBarIsVisible="False">
+    <Grid>
     <Grid RowDefinitions="Auto,*,Auto" Padding="18,18,18,22" RowSpacing="14">
         <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
             <Button Text="‹"
@@ -94,7 +95,7 @@
                 <RoundRectangle CornerRadius="6" />
             </Border.StrokeShape>
 
-            <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="8">
+            <Grid RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="8">
             <Label x:Name="ItemNameLabel"
                    Text="เลือกไอเทมเพื่อดูรายละเอียด"
                    TextColor="#F2E9D8"
@@ -114,7 +115,59 @@
                    FontSize="13"
                    LineHeight="1.2"
                    LineBreakMode="WordWrap" />
+
+            <Button Grid.Row="3"
+                    x:Name="UseItemButton"
+                    Text="ใช้ไอเทม"
+                    Clicked="OnUseItemClicked"
+                    IsVisible="False"
+                    BackgroundColor="#D8B45F"
+                    TextColor="#111111"
+                    FontAttributes="Bold"
+                    CornerRadius="7"
+                    Padding="12,9" />
             </Grid>
         </Border>
+    </Grid>
+
+    <Grid x:Name="UseItemOverlay"
+          IsVisible="False"
+          InputTransparent="True"
+          Opacity="0"
+          BackgroundColor="#B0000000"
+          Padding="24">
+        <Border Padding="18"
+                WidthRequest="320"
+                HorizontalOptions="Center"
+                VerticalOptions="Center"
+                BackgroundColor="#151310"
+                Stroke="#D8B45F"
+                StrokeThickness="1.5">
+            <Border.StrokeShape>
+                <RoundRectangle CornerRadius="10" />
+            </Border.StrokeShape>
+
+            <VerticalStackLayout Spacing="12">
+                <Label Text="ใช้ไอเทมแล้ว"
+                       TextColor="#D8B45F"
+                       FontSize="18"
+                       FontAttributes="Bold" />
+
+                <Label x:Name="UseItemMessageLabel"
+                       TextColor="#EFE8D8"
+                       FontSize="14"
+                       LineBreakMode="WordWrap"
+                       LineHeight="1.2" />
+
+                <Button Text="ตกลง"
+                        Clicked="OnUseItemOverlayOkClicked"
+                        BackgroundColor="#D8B45F"
+                        TextColor="#111111"
+                        FontAttributes="Bold"
+                        CornerRadius="7"
+                        Padding="14,10" />
+            </VerticalStackLayout>
+        </Border>
+    </Grid>
     </Grid>
 </ContentPage>

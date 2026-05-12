@@ -77,7 +77,16 @@ public class Item
         Effects.HpRestore.GetValueOrDefault() != 0 ||
         Effects.HungerRestore.GetValueOrDefault() != 0 ||
         Effects.ThirstRestore.GetValueOrDefault() != 0 ||
-        Effects.FatigueRestore.GetValueOrDefault() != 0);
+        Effects.FatigueRestore.GetValueOrDefault() != 0 ||
+        IsMedicalItem);
+
+    public bool IsMedicalItem =>
+        Category.Equals("Medicine", StringComparison.OrdinalIgnoreCase) ||
+        Category.Equals("medical", StringComparison.OrdinalIgnoreCase) ||
+        Subcategory.Equals("medicine", StringComparison.OrdinalIgnoreCase) ||
+        NameTh.Contains("ยา", StringComparison.Ordinal) ||
+        NameTh.Contains("แผล", StringComparison.Ordinal) ||
+        NameTh.Contains("ปฐมพยาบาล", StringComparison.Ordinal);
 }
 
 // รวมทุก Effect จากทุกประเภทไอเทมไว้ในคลาสเดียว (รองรับ Null ได้)

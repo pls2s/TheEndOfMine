@@ -1,6 +1,7 @@
 namespace TheEndOfMine.Views;
 
 using TheEndOfMine.Models;
+using TheEndOfMine.Services;
 
 public partial class EventPopup : ContentPage
 {
@@ -14,11 +15,20 @@ public partial class EventPopup : ContentPage
     }
 
     public EventPopup(GameEvent gameEvent, string chapterLabel, Action<EventChoice> onChoiceSelected)
+        : this(gameEvent, chapterLabel, null, onChoiceSelected)
+    {
+    }
+
+    public EventPopup(GameEvent gameEvent, string chapterLabel, Inventory? inventory, Action<EventChoice> onChoiceSelected)
     {
         InitializeComponent();
 
         _event = gameEvent;
         _onChoiceSelected = onChoiceSelected;
+        ThaiNarrativeTextNormalizer.Normalize(gameEvent);
+        EventChoiceInventoryGuard.Normalize(gameEvent, inventory);
+        ItemRewardConsistencyService.Normalize(gameEvent);
+        ThaiNarrativeTextNormalizer.Normalize(gameEvent);
 
         ChapterLabel.Text = chapterLabel;
         TitleLabel.Text = gameEvent.Title;
@@ -44,11 +54,13 @@ public partial class EventPopup : ContentPage
 
     private void OnChoiceOneClicked(object sender, EventArgs e)
     {
+        AudioFeedbackService.PlayStoryChoice();
         ApplyChoice(0);
     }
 
     private void OnChoiceTwoClicked(object sender, EventArgs e)
     {
+        AudioFeedbackService.PlayStoryChoice();
         ApplyChoice(1);
     }
 
@@ -77,6 +89,12 @@ public partial class EventPopup : ContentPage
 
     private async void OnContinueClicked(object sender, EventArgs e)
     {
+        AudioFeedbackService.PlayButtonTap();
         await Navigation.PopModalAsync();
+    }
+
+    protected override bool OnBackButtonPressed()
+    {
+        return !_choiceApplied;
     }
 }

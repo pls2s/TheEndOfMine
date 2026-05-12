@@ -21,4 +21,7 @@ public class GeneratedGameContent
 
     [JsonIgnore]
     public bool UsedRemoteLlm { get; set; }
+
+    [JsonIgnore]
+    public string FallbackReason { get; set; } = string.Empty;
 }
