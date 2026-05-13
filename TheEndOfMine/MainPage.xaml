@@ -25,7 +25,7 @@
 
             <!-- ส่วนบน: Status & Inventory -->
             <Grid Grid.Row="0" ColumnDefinitions="*, Auto">
-                <Frame Grid.Column="0" BackgroundColor="#88000000" BorderColor="#555555" Padding="10" CornerRadius="5" HorizontalOptions="Start">
+                <Frame x:Name="StatusPanel" Grid.Column="0" BackgroundColor="#88000000" BorderColor="#555555" Padding="10" CornerRadius="5" HorizontalOptions="Start">
                     <VerticalStackLayout Spacing="6" WidthRequest="168">
                         <Grid ColumnDefinitions="44, *" ColumnSpacing="8">
                             <Image Source="story/ui/ui_hp_icon.png" WidthRequest="42" HeightRequest="28" Aspect="AspectFit" HorizontalOptions="Center" VerticalOptions="Center" BackgroundColor="Transparent" />
@@ -55,15 +55,17 @@
                     </VerticalStackLayout>
                 </Frame>
 
-                <VerticalStackLayout Grid.Column="1" Spacing="2" HorizontalOptions="End">
-                    <ImageButton Source="story/ui/ui_inventory_button.png"
+                <VerticalStackLayout x:Name="TopActionPanel" Grid.Column="1" Spacing="2" HorizontalOptions="End">
+                    <ImageButton x:Name="InventoryButton"
+                                 Source="story/ui/ui_inventory_button.png"
                                  WidthRequest="60"
                                  HeightRequest="60"
                                  BackgroundColor="Transparent"
                                  Clicked="OnInventoryClicked" />
                     <Label Text="INVENTORY" TextColor="White" FontSize="10" HorizontalOptions="Center" />
 
-                    <Button Text="☰"
+                    <Button x:Name="MenuButton"
+                            Text="☰"
                             Clicked="OnGameMenuClicked"
                             WidthRequest="46"
                             HeightRequest="38"
@@ -134,7 +136,8 @@
 
             <!-- ส่วนกลาง: ปุ่มบนฉาก (ประตู / เตียง) -->
             <AbsoluteLayout Grid.Row="1" HorizontalOptions="Fill" VerticalOptions="Fill">
-                <Button Text="{Binding GoOutsideButtonText}"
+                <Button x:Name="GoOutsideButton"
+                    Text="{Binding GoOutsideButtonText}"
                     Command="{Binding GoOutsideCommand}"
                     Clicked="OnGoOutsideClicked"
                     AbsoluteLayout.LayoutBounds="0.0001, 0.4, 110, 45"
@@ -142,7 +145,7 @@
                     BackgroundColor="#88000000" TextColor="White" BorderColor="Gray" BorderWidth="1" CornerRadius="5" />
 
                 <!-- ===== เปลี่ยนกลุ่มปุ่ม REST ใหม่ ===== -->
-                <VerticalStackLayout AbsoluteLayout.LayoutBounds="1, 0.6, 100, AutoSize"
+                <VerticalStackLayout x:Name="RestPanel" AbsoluteLayout.LayoutBounds="1, 0.6, 100, AutoSize"
                          AbsoluteLayout.LayoutFlags="PositionProportional"
                          Spacing="5">
 
@@ -181,7 +184,7 @@
                     </VerticalStackLayout>
                 </Frame>
 
-                <Frame Grid.Column="1" BackgroundColor="#88000000" BorderColor="#555555" Padding="10" CornerRadius="5" Margin="10,0,0,0">
+                <Frame x:Name="TimePanel" Grid.Column="1" BackgroundColor="#88000000" BorderColor="#555555" Padding="10" CornerRadius="5" Margin="10,0,0,0">
                     <VerticalStackLayout HorizontalOptions="Center" VerticalOptions="Center">
                         <Label Text="{Binding DayTimeDisplay}" TextColor="White" FontSize="18" FontAttributes="Bold" HorizontalOptions="Center" />
                         <Label Text="(1 real second = 1 game minute)" TextColor="Gray" FontSize="10" HorizontalOptions="Center" />
@@ -297,54 +300,90 @@
         <Grid x:Name="TutorialOverlay"
               IsVisible="False"
               Opacity="0"
-              BackgroundColor="#DD000000"
-              Padding="24"
+              BackgroundColor="Transparent"
               ZIndex="1200">
-            <Border Padding="20"
+            <GraphicsView x:Name="TutorialDimCanvas"
+                          HorizontalOptions="Fill"
+                          VerticalOptions="Fill"
+                          InputTransparent="True" />
+
+            <Label x:Name="TutorialPointerLabel"
+                   Text="จุดนี้"
+                   TextColor="#111111"
+                   BackgroundColor="#D8B45F"
+                   FontSize="12"
+                   FontAttributes="Bold"
+                   Padding="10,5"
+                   HorizontalOptions="Start"
+                   VerticalOptions="Start" />
+
+            <Border x:Name="TutorialHighlight"
+                    BackgroundColor="Transparent"
+                    Stroke="#D8B45F"
+                    StrokeThickness="4"
+                    HorizontalOptions="Start"
+                    VerticalOptions="Start"
+                    WidthRequest="120"
+                    HeightRequest="70">
+                <Border.StrokeShape>
+                    <RoundRectangle CornerRadius="12" />
+                </Border.StrokeShape>
+            </Border>
+
+            <Border x:Name="TutorialCard"
+                    Padding="18"
                     HorizontalOptions="Center"
-                    VerticalOptions="Center"
+                    VerticalOptions="Start"
+                    Margin="20,0,20,0"
                     BackgroundColor="#151310"
                     Stroke="#D8B45F"
-                    StrokeThickness="1.5"
-                    WidthRequest="330">
+                    StrokeThickness="1.5">
                 <Border.StrokeShape>
                     <RoundRectangle CornerRadius="14" />
                 </Border.StrokeShape>
 
-                <VerticalStackLayout Spacing="13">
-                    <Label Text="เริ่มเอาตัวรอด"
-                           TextColor="#D8B45F"
-                           FontSize="24"
+                <VerticalStackLayout Spacing="12">
+                    <Label x:Name="TutorialStepLabel"
+                           Text="1/5"
+                           TextColor="#AFA694"
+                           FontSize="12"
                            FontAttributes="Bold" />
 
-                    <Label Text="GO OUTSIDE เพื่อออกสำรวจและเจอเหตุการณ์ใหม่"
+                    <Label x:Name="TutorialTitleLabel"
+                           Text="เริ่มเอาตัวรอด"
+                           TextColor="#D8B45F"
+                           FontSize="22"
+                           FontAttributes="Bold" />
+
+                    <Label x:Name="TutorialBodyLabel"
+                           Text="GO OUTSIDE เพื่อออกสำรวจและเจอเหตุการณ์ใหม่"
                            TextColor="#EFE8D8"
                            FontSize="14"
+                           LineHeight="1.2"
                            LineBreakMode="WordWrap" />
 
-                    <Label Text="ไอเทมในกระเป๋าช่วยปลดล็อกหรือช่วยลดผลเสียของบางตัวเลือก เช่น ไฟฉายในที่มืด เชือกตอนปีน หรือยาตอนบาดเจ็บ"
-                           TextColor="#EFE8D8"
-                           FontSize="14"
-                           LineBreakMode="WordWrap" />
+                    <Grid ColumnDefinitions="*,*" ColumnSpacing="10" Margin="0,6,0,0">
+                        <Button x:Name="TutorialSkipButton"
+                                Text="ข้าม"
+                                Clicked="OnTutorialSkipClicked"
+                                BackgroundColor="#241F19"
+                                BorderColor="#4E493F"
+                                BorderWidth="1"
+                                TextColor="#EFE8D8"
+                                FontAttributes="Bold"
+                                CornerRadius="8"
+                                Padding="14,11" />
 
-                    <Label Text="REST ใช้ลดความเหนื่อย แต่เวลาเดินและทรัพยากรจะลดลง"
-                           TextColor="#EFE8D8"
-                           FontSize="14"
-                           LineBreakMode="WordWrap" />
-
-                    <Label Text="เกมมี Auto Save และกด SAVE GAME เองได้ในเมนูสามขีด"
-                           TextColor="#EFE8D8"
-                           FontSize="14"
-                           LineBreakMode="WordWrap" />
-
-                    <Button Text="เริ่มเล่น"
-                            Clicked="OnTutorialOkClicked"
-                            BackgroundColor="#D8B45F"
-                            TextColor="#111111"
-                            FontAttributes="Bold"
-                            CornerRadius="8"
-                            Padding="14,12"
-                            Margin="0,8,0,0" />
+                        <Button Grid.Column="1"
+                                x:Name="TutorialNextButton"
+                                Text="ถัดไป"
+                                Clicked="OnTutorialNextClicked"
+                                BackgroundColor="#D8B45F"
+                                TextColor="#111111"
+                                FontAttributes="Bold"
+                                CornerRadius="8"
+                                Padding="14,11" />
+                    </Grid>
                 </VerticalStackLayout>
             </Border>
         </Grid>
