@@ -13,11 +13,15 @@ public partial class MainPage : ContentPage
 
     private readonly MainViewModel _vm;
     private readonly GameDatabase _db;
+    private readonly TutorialDimDrawable _tutorialDimDrawable = new();
     private bool _hasLoadedScene;
+    private int _tutorialStepIndex;
+    private TutorialStep[] _tutorialSteps = [];
 
     public MainPage()
     {
         InitializeComponent();
+        TutorialDimCanvas.Drawable = _tutorialDimDrawable;
 
         _db = new GameDatabase();
         _vm = new MainViewModel();
@@ -112,18 +116,188 @@ public partial class MainPage : ContentPage
         if (Preferences.Get(TutorialSeenPreferenceKey, false))
             return;
 
+        _tutorialSteps =
+        [
+            new TutorialStep(StatusPanel, "ค่าสถานะ", "แถบนี้คือ HP, อาหาร, น้ำ, ความเหนื่อย, เสียง และการติดเชื้อ ถ้าค่าบางอย่างแย่ลง การออกสำรวจจะเสี่ยงขึ้น"),
+            new TutorialStep(GoOutsideButton, "ออกสำรวจ", "กด GO OUTSIDE เพื่อเดินหน้าเนื้อเรื่องและเจอเหตุการณ์ใหม่ ตัวเลือกบางอย่างจะดีขึ้นถ้าคุณมีไอเทมที่เหมาะ"),
+            new TutorialStep(RestPanel, "พัก / นอน", "REST และ SLEEP ลดความเหนื่อย แต่เวลาจะเดินต่อ อาหารและน้ำอาจลดลงตามเวลาที่ผ่านไป"),
+            new TutorialStep(InventoryButton, "กระเป๋า", "เปิด INVENTORY เพื่อดูของ ใช้อาหาร น้ำ ยา หรือดูไอเทมที่ช่วยปลดล็อก/ลดผลเสียของตัวเลือกใน event"),
+            new TutorialStep(MenuButton, "เมนูสามขีด", "เปิดเมนูนี้เพื่อ SAVE GAME, เปิด/ปิดเสียง หรือหยุดเกม เกมมี Auto Save อยู่แล้ว แต่กด save เองได้")
+        ];
+
+        _tutorialStepIndex = 0;
         TutorialOverlay.IsVisible = true;
         TutorialOverlay.InputTransparent = false;
+        TutorialOverlay.Opacity = 0;
+        await ShowTutorialStepAsync();
         await TutorialOverlay.FadeTo(1, 180, Easing.CubicOut);
     }
 
-    private async void OnTutorialOkClicked(object sender, EventArgs e)
+    private async void OnTutorialNextClicked(object sender, EventArgs e)
     {
         AudioFeedbackService.PlayButtonTap();
+        if (_tutorialStepIndex >= _tutorialSteps.Length - 1)
+        {
+            await FinishTutorialAsync();
+            return;
+        }
+
+        _tutorialStepIndex++;
+        await ShowTutorialStepAsync();
+    }
+
+    private async void OnTutorialSkipClicked(object sender, EventArgs e)
+    {
+        AudioFeedbackService.PlayButtonTap();
+        await FinishTutorialAsync();
+    }
+
+    private async Task ShowTutorialStepAsync()
+    {
+        if (_tutorialSteps.Length == 0)
+            return;
+
+        var step = _tutorialSteps[_tutorialStepIndex];
+        TutorialStepLabel.Text = $"{_tutorialStepIndex + 1}/{_tutorialSteps.Length}";
+        TutorialTitleLabel.Text = step.Title;
+        TutorialBodyLabel.Text = step.Body;
+        TutorialNextButton.Text = _tutorialStepIndex >= _tutorialSteps.Length - 1 ? "เริ่มเล่น" : "ถัดไป";
+
+        await WaitForTutorialLayoutAsync(step.Target);
+        MoveTutorialHighlight(step.Target);
+        await TutorialHighlight.ScaleTo(1.04, 140, Easing.CubicOut);
+        await TutorialHighlight.ScaleTo(1, 110, Easing.CubicIn);
+    }
+
+    private async Task WaitForTutorialLayoutAsync(VisualElement target)
+    {
+        for (var attempt = 0; attempt < 12; attempt++)
+        {
+            var root = (VisualElement)Content;
+            if (root.Width > 0 && root.Height > 0 && target.Width > 0 && target.Height > 0)
+                return;
+
+            await Task.Delay(50);
+        }
+    }
+
+    private void MoveTutorialHighlight(VisualElement target)
+    {
+        var root = (VisualElement)Content;
+        var x = target.X;
+        var y = target.Y;
+        var parent = target.Parent as Element;
+
+        while (parent is VisualElement visualParent && parent != root)
+        {
+            x += visualParent.X;
+            y += visualParent.Y;
+            parent = visualParent.Parent;
+        }
+
+        const double padding = 8;
+        var width = Math.Max(48, target.Width + padding * 2);
+        var height = Math.Max(38, target.Height + padding * 2);
+        var left = Math.Max(6, x - padding);
+        var top = Math.Max(6, y - padding);
+
+        TutorialHighlight.WidthRequest = width;
+        TutorialHighlight.HeightRequest = height;
+        TutorialHighlight.TranslationX = left;
+        TutorialHighlight.TranslationY = top;
+
+        MoveTutorialDimLayer(root, left, top, width, height);
+
+        TutorialPointerLabel.TranslationX = Math.Min(Math.Max(6, left), Math.Max(6, root.Width - 72));
+        TutorialPointerLabel.TranslationY = top > 36 ? top - 34 : top + height + 8;
+
+        MoveTutorialCardAwayFromTarget(root, top, height);
+    }
+
+    private void MoveTutorialDimLayer(VisualElement root, double left, double top, double width, double height)
+    {
+        var rootWidth = Math.Max(0, root.Width);
+        var rootHeight = Math.Max(0, root.Height);
+
+        _tutorialDimDrawable.SetHole(rootWidth, rootHeight, left, top, width, height);
+        TutorialDimCanvas.Invalidate();
+    }
+
+    private void MoveTutorialCardAwayFromTarget(VisualElement root, double targetTop, double targetHeight)
+    {
+        const double margin = 20;
+        const double bottomSafeArea = 28;
+        var cardHeight = TutorialCard.Height > 0 ? TutorialCard.Height : 220;
+        var targetCenterY = targetTop + targetHeight / 2;
+        var showBelow = targetCenterY < root.Height * 0.46;
+
+        var cardTop = showBelow
+            ? targetTop + targetHeight + 22
+            : targetTop - cardHeight - 22;
+
+        if (cardTop < margin)
+            cardTop = margin;
+
+        var maxTop = Math.Max(margin, root.Height - cardHeight - bottomSafeArea);
+        if (cardTop > maxTop)
+            cardTop = maxTop;
+
+        TutorialCard.TranslationY = cardTop;
+    }
+
+    private async Task FinishTutorialAsync()
+    {
         Preferences.Set(TutorialSeenPreferenceKey, true);
         await TutorialOverlay.FadeTo(0, 130, Easing.CubicIn);
         TutorialOverlay.IsVisible = false;
         TutorialOverlay.InputTransparent = true;
+    }
+
+    private sealed record TutorialStep(VisualElement Target, string Title, string Body);
+
+    private sealed class TutorialDimDrawable : Microsoft.Maui.Graphics.IDrawable
+    {
+        private readonly Microsoft.Maui.Graphics.Color _dimColor =
+            Microsoft.Maui.Graphics.Color.FromArgb("#99000000");
+
+        private float _left;
+        private float _top;
+        private float _right;
+        private float _bottom;
+        private bool _hasHole;
+
+        public void SetHole(double viewWidth, double viewHeight, double left, double top, double width, double height)
+        {
+            if (viewWidth <= 0 || viewHeight <= 0 || width <= 0 || height <= 0)
+            {
+                _hasHole = false;
+                return;
+            }
+
+            _hasHole = true;
+            _left = (float)Math.Clamp(left, 0, viewWidth);
+            _top = (float)Math.Clamp(top, 0, viewHeight);
+            _right = (float)Math.Clamp(left + width, _left, viewWidth);
+            _bottom = (float)Math.Clamp(top + height, _top, viewHeight);
+        }
+
+        public void Draw(Microsoft.Maui.Graphics.ICanvas canvas, Microsoft.Maui.Graphics.RectF dirtyRect)
+        {
+            if (!_hasHole)
+                return;
+
+            canvas.FillColor = _dimColor;
+
+            var fullWidth = dirtyRect.Width;
+            var fullHeight = dirtyRect.Height;
+            var right = Math.Min(_right, fullWidth);
+            var bottom = Math.Min(_bottom, fullHeight);
+
+            canvas.FillRectangle(0, 0, fullWidth, _top);
+            canvas.FillRectangle(0, bottom, fullWidth, Math.Max(0, fullHeight - bottom));
+            canvas.FillRectangle(0, _top, _left, Math.Max(0, bottom - _top));
+            canvas.FillRectangle(right, _top, Math.Max(0, fullWidth - right), Math.Max(0, bottom - _top));
+        }
     }
 
     protected override async void OnDisappearing()
