@@ -75,6 +75,7 @@ public static class ItemRewardConsistencyService
         item.NameEn = profile.NameEn;
         item.Category = profile.Category;
         item.DescriptionTh = GetProfileDescription(profile.Alias);
+        ApplyProfileEffects(item, profile.Alias);
     }
 
     private static ItemProfile? FindProfile(Item item, string context)
@@ -184,6 +185,19 @@ public static class ItemRewardConsistencyService
             "wrench" => "ประแจสำหรับขันน็อต ซ่อมอุปกรณ์ หรือใช้เป็นอาวุธฉุกเฉิน",
             _ => "ไอเทมเอาตัวรอดที่พบจากเหตุการณ์"
         };
+    }
+
+    private static void ApplyProfileEffects(Item item, string alias)
+    {
+        if (alias != "backpack")
+            return;
+
+        item.Effects ??= new ItemEffects();
+        item.Effects.IsContainer = true;
+        item.Effects.CarryCapacityBonus = Math.Max(4f, item.Effects.CarryCapacityBonus.GetValueOrDefault());
+        item.WeightKg = item.WeightKg <= 0 ? 1.1f : item.WeightKg;
+        item.DurabilityMax ??= 1;
+        item.Durability ??= item.DurabilityMax;
     }
 
     private static void EnsureResultMentionsReward(EventChoice choice)

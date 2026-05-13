@@ -293,5 +293,61 @@
             </VerticalStackLayout>
         </Grid>
 
+        <!-- ================= 5. First-time Tutorial Overlay ================= -->
+        <Grid x:Name="TutorialOverlay"
+              IsVisible="False"
+              Opacity="0"
+              BackgroundColor="#DD000000"
+              Padding="24"
+              ZIndex="1200">
+            <Border Padding="20"
+                    HorizontalOptions="Center"
+                    VerticalOptions="Center"
+                    BackgroundColor="#151310"
+                    Stroke="#D8B45F"
+                    StrokeThickness="1.5"
+                    WidthRequest="330">
+                <Border.StrokeShape>
+                    <RoundRectangle CornerRadius="14" />
+                </Border.StrokeShape>
+
+                <VerticalStackLayout Spacing="13">
+                    <Label Text="เริ่มเอาตัวรอด"
+                           TextColor="#D8B45F"
+                           FontSize="24"
+                           FontAttributes="Bold" />
+
+                    <Label Text="GO OUTSIDE เพื่อออกสำรวจและเจอเหตุการณ์ใหม่"
+                           TextColor="#EFE8D8"
+                           FontSize="14"
+                           LineBreakMode="WordWrap" />
+
+                    <Label Text="ไอเทมในกระเป๋าช่วยปลดล็อกหรือช่วยลดผลเสียของบางตัวเลือก เช่น ไฟฉายในที่มืด เชือกตอนปีน หรือยาตอนบาดเจ็บ"
+                           TextColor="#EFE8D8"
+                           FontSize="14"
+                           LineBreakMode="WordWrap" />
+
+                    <Label Text="REST ใช้ลดความเหนื่อย แต่เวลาเดินและทรัพยากรจะลดลง"
+                           TextColor="#EFE8D8"
+                           FontSize="14"
+                           LineBreakMode="WordWrap" />
+
+                    <Label Text="เกมมี Auto Save และกด SAVE GAME เองได้ในเมนูสามขีด"
+                           TextColor="#EFE8D8"
+                           FontSize="14"
+                           LineBreakMode="WordWrap" />
+
+                    <Button Text="เริ่มเล่น"
+                            Clicked="OnTutorialOkClicked"
+                            BackgroundColor="#D8B45F"
+                            TextColor="#111111"
+                            FontAttributes="Bold"
+                            CornerRadius="8"
+                            Padding="14,12"
+                            Margin="0,8,0,0" />
+                </VerticalStackLayout>
+            </Border>
+        </Grid>
+
     </Grid>
 </ContentPage>

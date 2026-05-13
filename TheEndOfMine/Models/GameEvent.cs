@@ -26,6 +26,12 @@ public class EventChoice
     [JsonPropertyName("itemReward")]
     public Item? ItemReward { get; set; }
 
+    [JsonPropertyName("items_add")]
+    public List<string> ItemsAdd { get; set; } = new();
+
+    [JsonIgnore]
+    public string InventoryEffectNote { get; set; } = string.Empty;
+
     [JsonPropertyName("resultText")]
     public string ResultText { get; set; } = string.Empty;
 }

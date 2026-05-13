@@ -18,9 +18,15 @@ public class Inventory
 
     public bool AddItem(Item item)
     {
+        EnsureCapacityMatchesSlots();
+
+        if (IsFull && GetCarryCapacityBonusSlots(item) > 0)
+            ExpandRowsForCapacityBonus(GetCarryCapacityBonusSlots(item));
+
         int index = Slots.IndexOf(null);
         if (index == -1) return false;
         Slots[index] = item;
+        ExpandRowsForCapacityBonus(GetCarryCapacityBonusSlots(item));
         return true;
     }
 
@@ -35,6 +41,8 @@ public class Inventory
 
     public void CompactSlots()
     {
+        EnsureCapacityMatchesSlots();
+
         var slotCount = Math.Max(Slots.Count, Capacity);
         var items = Slots.Where(slot => slot != null).ToList();
 
@@ -50,5 +58,38 @@ public class Inventory
         Slots.AddRange(new Item?[Columns]);
     }
 
+    public void ApplyContainerCapacityBonuses()
+    {
+        EnsureCapacityMatchesSlots();
+
+        var bonusSlots = GetItems().Sum(GetCarryCapacityBonusSlots);
+        var requiredRows = 4 + (int)Math.Ceiling(bonusSlots / (double)Columns);
+        while (Rows < requiredRows)
+            ExpandRow();
+    }
+
     public IEnumerable<Item> GetItems() => Slots.Where(s => s != null)!;
+
+    private void ExpandRowsForCapacityBonus(int bonusSlots)
+    {
+        if (bonusSlots <= 0)
+            return;
+
+        var rowsToAdd = (int)Math.Ceiling(bonusSlots / (double)Columns);
+        for (var i = 0; i < rowsToAdd; i++)
+            ExpandRow();
+    }
+
+    private void EnsureCapacityMatchesSlots()
+    {
+        Rows = Math.Max(4, (int)Math.Ceiling(Slots.Count / (double)Columns));
+        while (Slots.Count < Capacity)
+            Slots.Add(null);
+    }
+
+    private static int GetCarryCapacityBonusSlots(Item? item)
+    {
+        var bonus = item?.Effects?.CarryCapacityBonus.GetValueOrDefault() ?? 0f;
+        return Math.Max(0, (int)Math.Round(bonus));
+    }
 }

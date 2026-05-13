@@ -41,6 +41,7 @@ public partial class InventoryPage : ContentPage
 
         _state = state;
         _inventory = inventory;
+        _inventory.ApplyContainerCapacityBonuses();
         if (_state != null)
             _state.Survivor.Inventory = _inventory;
 
@@ -203,6 +204,8 @@ public partial class InventoryPage : ContentPage
             parts.Add($"ติดเชื้อ -{effects.BiteInfectionReduce.GetValueOrDefault():0}");
         else if (item.IsMedicalItem)
             parts.Add("ติดเชื้อ -8");
+        if (effects.CarryCapacityBonus.GetValueOrDefault() > 0)
+            parts.Add($"ช่องเก็บของ +{effects.CarryCapacityBonus.GetValueOrDefault():0}");
 
         return parts.Count == 0 ? string.Empty : $" • {string.Join(", ", parts)}";
     }
