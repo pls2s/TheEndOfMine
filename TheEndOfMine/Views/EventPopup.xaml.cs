@@ -49,7 +49,9 @@ public partial class EventPopup : ContentPage
             return;
         }
 
-        button.Text = choice.Text;
+        button.Text = string.IsNullOrWhiteSpace(choice.InventoryEffectNote)
+            ? choice.Text
+            : $"{choice.Text}\n{choice.InventoryEffectNote}";
     }
 
     private void OnChoiceOneClicked(object sender, EventArgs e)
@@ -76,7 +78,9 @@ public partial class EventPopup : ContentPage
         _choiceApplied = true;
         ChoicePanel.IsVisible = false;
         ResultPanel.IsVisible = true;
-        ResultLabel.Text = choice.ResultText;
+        ResultLabel.Text = string.IsNullOrWhiteSpace(choice.InventoryEffectNote)
+            ? choice.ResultText
+            : $"{choice.ResultText}\n\n{choice.InventoryEffectNote}";
 
         if (choice.ItemReward != null)
         {

@@ -16,6 +16,7 @@ public class LlmGameContentService
     private const string OpenAiModel = "gpt-5.4-mini";
     private const string TyphoonEndpoint = "https://api.opentyphoon.ai/v1/chat/completions";
     private const string TyphoonModel = "typhoon-v2.5-30b-a3b-instruct";
+    private const int MaxLlmAttempts = 3;
     private const string SystemPrompt = """
     คุณคือระบบสร้างเนื้อเรื่องของเกม The End of Mine เกมเอาตัวรอดหลังหายนะที่แสดงผลเป็นภาษาไทย
 
@@ -48,7 +49,7 @@ public class LlmGameContentService
 
     private static readonly HttpClient HttpClient = new()
     {
-        Timeout = TimeSpan.FromSeconds(45)
+        Timeout = TimeSpan.FromSeconds(120)
     };
 
     private readonly ImageGenerationService _imageGenerationService;
@@ -98,15 +99,7 @@ public class LlmGameContentService
         {
             var prompt = BuildPrompt(survivor, chapterNumber, maxChapters, eventsPerChapter, state, assetCatalog);
             var requestJson = JsonSerializer.Serialize(CreateLlmRequest(settings, prompt), JsonOptions);
-
-            using var request = new HttpRequestMessage(HttpMethod.Post, settings.Endpoint);
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", settings.ApiKey);
-            request.Content = new StringContent(requestJson, Encoding.UTF8, "application/json");
-
-            using var response = await HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
-            response.EnsureSuccessStatusCode();
-
-            var responseJson = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            var responseJson = await SendLlmRequestWithRetryAsync(settings, requestJson, cancellationToken).ConfigureAwait(false);
             var contentJson = ExtractMessageContent(responseJson);
             var generated = JsonSerializer.Deserialize<GeneratedGameContent>(NormalizeJson(contentJson), JsonOptions);
 
@@ -207,6 +200,58 @@ public class LlmGameContentService
         };
     }
 
+    private static async Task<string> SendLlmRequestWithRetryAsync(
+        LlmRuntimeSettings settings,
+        string requestJson,
+        CancellationToken cancellationToken)
+    {
+        Exception? lastException = null;
+
+        for (var attempt = 1; attempt <= MaxLlmAttempts; attempt++)
+        {
+            try
+            {
+                using var request = new HttpRequestMessage(HttpMethod.Post, settings.Endpoint);
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", settings.ApiKey);
+                request.Headers.ConnectionClose = true;
+                request.Content = new StringContent(requestJson, Encoding.UTF8, "application/json");
+
+                using var response = await HttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
+                    .ConfigureAwait(false);
+                var responseJson = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+
+                if (!response.IsSuccessStatusCode)
+                    throw new HttpRequestException($"HTTP {(int)response.StatusCode}: {TrimForError(responseJson)}");
+
+                return responseJson;
+            }
+            catch (Exception ex) when (IsTransientLlmException(ex) && attempt < MaxLlmAttempts)
+            {
+                lastException = ex;
+                await Task.Delay(TimeSpan.FromMilliseconds(650 * attempt), cancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        throw lastException ?? new HttpRequestException("LLM request failed.");
+    }
+
+    private static bool IsTransientLlmException(Exception ex)
+    {
+        var message = ex.Message;
+        return ex is HttpRequestException or TaskCanceledException or IOException ||
+               message.Contains("Socket closed", StringComparison.OrdinalIgnoreCase) ||
+               message.Contains("Connection reset", StringComparison.OrdinalIgnoreCase) ||
+               message.Contains("timed out", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string TrimForError(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return "empty response";
+
+        return value.Length <= 500 ? value : value[..500];
+    }
+
     private string BuildPrompt(
         Survivor survivor,
         int chapterNumber,
@@ -284,7 +329,10 @@ public class LlmGameContentService
         - resultText ของ choice ต้องทิ้งผลหรือเบาะแสที่ event ถัดไปใช้ต่อได้
         - ห้ามรีเซ็ตสถานการณ์เหมือนไม่เคยเกิด event ก่อนหน้า และห้ามเริ่มทุก event ด้วยฉากใหม่ที่ไม่เกี่ยวกับเรื่องเดิม
         - ถ้า choice ระบุว่า "ใช้ไอเทม" ต้องใช้ไอเทมที่ผู้เล่นมีจริง หรือไอเทมที่อยู่ในฉากนั้นอย่างชัดเจน และต้องใช้ตรงหน้าที่ของไอเทม
-        - ห้ามใช้ไอเทมผิดบริบท เช่น กระเป๋าเป้ใช้แบกของ/จัดของเท่านั้น ห้ามใช้เปิดทาง งัดประตู ตัดเหล็ก รักษาแผล กิน ดื่ม หรือโจมตี
+        - ถ้าผู้เล่นมีไอเทมที่เหมาะกับสถานการณ์ ให้สร้างอย่างน้อย 1 choice ใน chapter ที่ใช้ไอเทมนั้นอย่างสมเหตุผล เช่น ไฟฉายในที่มืด, เชือกกับการปีน/ข้าม, แผนที่กับการเลือกเส้นทาง, ยากับแผล, มีดกับการตัด/ป้องกันตัว
+        - choice ที่ใช้ไอเทมควรมีผลเสียต่ำกว่าทางเลือกมือเปล่า แต่ยังต้องมี tradeoff เช่น เสีย durability, เสียงดังขึ้น, ใช้เวลา หรือเสี่ยงเสียไอเทม
+        - ห้ามใช้ไอเทมผิดบริบท เช่น กระเป๋าเป้มีประโยชน์คือเพิ่มช่องเก็บของ/จัดสัมภาระเท่านั้น ห้ามใช้เปิดทาง งัดประตู ตัดเหล็ก รักษาแผล กิน ดื่ม หรือโจมตี
+        - ถ้าจะให้ backpack เป็น itemReward ต้องให้เป็นไอเทม container ที่ช่วยเพิ่มช่องเก็บของจริง และ resultText ต้องสื่อว่าเก็บของได้มากขึ้น ไม่ใช่ใช้เป็นเครื่องมือ
         - เครื่องมือเปิดทางต้องเป็นของที่เหมาะจริง เช่น ชะแลง มีด คีม ไขควง เชือก ไฟฉาย หรืออุปกรณ์ซ่อม โดยต้องอธิบายว่าใช้ทำอะไร
         - ถ้าไม่มีไอเทมที่เหมาะ ให้เขียนเป็นการกระทำทั่วไป เช่น "ค่อย ๆ ลงไปตรวจ" หรือ "ถอยมาตั้งหลัก" แทนการฝืนใช้ไอเทม
         - โทนต้องกดดัน เน้นการเอาตัวรอด และแต่ละเหตุการณ์ต้องไม่ซ้ำอารมณ์กัน
@@ -402,7 +450,7 @@ public class LlmGameContentService
         var text = $"{item.Id} {item.NameTh} {item.NameEn} {item.Subcategory}".ToLowerInvariant();
 
         if (effects?.IsContainer == true || text.Contains("backpack", StringComparison.Ordinal) || item.NameTh.Contains("กระเป๋า", StringComparison.Ordinal))
-            return "ใช้แบกของหรือจัดของเท่านั้น ห้ามใช้เปิดทาง งัด ต่อสู้ กิน ดื่ม หรือรักษา";
+            return "เพิ่มช่องเก็บของและใช้จัดสัมภาระเท่านั้น ห้ามใช้เปิดทาง งัด ต่อสู้ กิน ดื่ม หรือรักษา";
         if (category == "food" || effects?.HungerRestore > 0)
             return "กินเพื่อเพิ่มอาหารเท่านั้น";
         if (category == "water" || effects?.ThirstRestore > 0)
@@ -545,6 +593,16 @@ public class LlmGameContentService
                 {
                     NormalizeItem(choice.ItemReward, $"reward_{i + 1}_{c + 1}", assetCatalog);
                     ItemRewardConsistencyService.Normalize(choice);
+                    rewardCount++;
+                    if (rewardCount > 5)
+                        choice.ItemReward = null;
+                }
+                else if (choice.ItemsAdd.Count > 0)
+                {
+                    choice.ItemReward = CreateFallbackItemFromStoryTreeReference(choice.ItemsAdd[0], $"story_tree_{i + 1}_{c + 1}");
+                    NormalizeItem(choice.ItemReward, $"story_tree_{i + 1}_{c + 1}", assetCatalog);
+                    ItemRewardConsistencyService.Normalize(choice);
+                    ItemRewardConsistencyService.Normalize(choice.ItemReward);
                     rewardCount++;
                     if (rewardCount > 5)
                         choice.ItemReward = null;
@@ -830,6 +888,12 @@ public class LlmGameContentService
             return null;
 
         var effects = obj["effects"] as JsonObject;
+        var itemsAdd = obj["items_add"]?.AsArray()
+            .Select(item => item?.GetValue<string>())
+            .Where(item => !string.IsNullOrWhiteSpace(item))
+            .Cast<string>()
+            .ToList() ?? new List<string>();
+
         return new EventChoice
         {
             Id = ReadString(obj, "id"),
@@ -838,7 +902,8 @@ public class LlmGameContentService
             HungerEffect = ReadFloat(effects, "hunger"),
             ThirstEffect = ReadFloat(effects, "thirst"),
             FatigueEffect = Math.Abs(ReadFloat(effects, "fatigue")),
-            ResultText = ReplaceSurvivorName(ReadString(obj, "narrative"), survivorName)
+            ResultText = ReplaceSurvivorName(ReadString(obj, "narrative"), survivorName),
+            ItemsAdd = itemsAdd
         };
     }
 
@@ -1032,6 +1097,32 @@ public class LlmGameContentService
             DescriptionTh = "ไอเทมเริ่มต้นจากเรื่องราวที่สุ่มขึ้นสำหรับรอบนี้",
             StoryAlias = $"gen_{id}"
         };
+    }
+
+    private static Item CreateFallbackItemFromStoryTreeReference(string reference, string fallbackId)
+    {
+        var lowered = reference.ToLowerInvariant();
+        var nameTh =
+            lowered.Contains("drink", StringComparison.Ordinal) || lowered.Contains("water", StringComparison.Ordinal) ? "น้ำดื่ม" :
+            lowered.Contains("food", StringComparison.Ordinal) ? "อาหารกระป๋อง" :
+            lowered.Contains("wpn", StringComparison.Ordinal) || lowered.Contains("knife", StringComparison.Ordinal) ? "มีดพับ" :
+            lowered.Contains("tool", StringComparison.Ordinal) || lowered.Contains("flashlight", StringComparison.Ordinal) ? "ไฟฉาย" :
+            lowered.Contains("med", StringComparison.Ordinal) || lowered.Contains("bandage", StringComparison.Ordinal) ? "ผ้าพันแผล" :
+            "ของใช้จากเหตุการณ์";
+
+        var item = CreateFallbackItem(nameTh, fallbackId);
+        item.Id = string.IsNullOrWhiteSpace(reference) ? item.Id : reference;
+        item.StoryAlias = nameTh switch
+        {
+            "น้ำดื่ม" => "water_bottle",
+            "อาหารกระป๋อง" => "canned_food",
+            "มีดพับ" => "knife",
+            "ไฟฉาย" => "flashlight",
+            "ผ้าพันแผล" => "bandage",
+            _ => item.StoryAlias
+        };
+
+        return item;
     }
 
     private static async Task<LlmRuntimeSettings> LoadSettingsAsync(CancellationToken cancellationToken)

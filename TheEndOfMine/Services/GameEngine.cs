@@ -226,10 +226,7 @@ public class GameEngine
             fatigueDelta: choice.FatigueEffect
         );
         ApplyChoiceSurvivalPressure(choice);
-        WearItemUsedByChoice(choice);
-
-        if (choice.ItemReward != null)
-            CurrentState.Survivor.Inventory.AddItem(choice.ItemReward);
+        InventoryChoiceEffectService.Apply(CurrentState, choice);
 
         CheckDeath(BuildChoiceDeathCause(resolvedEvent, choice));
         if (CurrentState.Status == GameStatus.Running)
@@ -397,60 +394,6 @@ public class GameEngine
             infection -= 14f;
 
         return infection;
-    }
-
-    private void WearItemUsedByChoice(EventChoice choice)
-    {
-        if (CurrentState == null) return;
-
-        var item = FindMentionedDurableItem(choice);
-        if (item?.Durability == null)
-            return;
-
-        item.Durability = Math.Max(0, item.Durability.Value - 1);
-        if (item.Durability <= 0)
-            CurrentState.Survivor.Inventory.RemoveItem(item);
-    }
-
-    private Item? FindMentionedDurableItem(EventChoice choice)
-    {
-        if (CurrentState == null) return null;
-
-        var text = $"{choice.Text} {choice.ResultText}";
-        foreach (var item in CurrentState.Survivor.Inventory.GetItems())
-        {
-            if (IsDurableTool(item) && MentionsItem(text, item))
-                return item;
-        }
-
-        return null;
-    }
-
-    private static bool IsDurableTool(Item item)
-    {
-        var category = item.Category.ToLowerInvariant();
-        var effects = item.Effects;
-        return category is "tool" or "weapon" ||
-               effects?.IsGeneralTool == true ||
-               effects?.IsLightSource == true ||
-               effects?.IsRope == true ||
-               effects?.IsSurvivalTool == true ||
-               effects?.DmgMin > 0 ||
-               effects?.DmgMax > 0;
-    }
-
-    private static bool MentionsItem(string text, Item item)
-    {
-        return MentionsToken(text, item.NameTh) ||
-               MentionsToken(text, item.NameEn) ||
-               MentionsToken(text, item.Id) ||
-               MentionsToken(text, item.StoryAlias);
-    }
-
-    private static bool MentionsToken(string text, string? token)
-    {
-        return !string.IsNullOrWhiteSpace(token) &&
-               text.Contains(token, StringComparison.OrdinalIgnoreCase);
     }
 
     private void ApplyNoiseAmbushRisk()

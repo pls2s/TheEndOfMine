@@ -212,7 +212,7 @@ public partial class IntroPage : ContentPage
 
                 await ShowGameAlertAsync(
                     "ใช้เนื้อเรื่อง fallback",
-                    $"{reason}\nระบบจึงสร้างเนื้อเรื่อง fallback แบบสุ่มให้ก่อน");
+                    reason);
             }
 
             // 4. ไปหน้าเลือกความยาก

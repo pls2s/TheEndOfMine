@@ -1,5 +1,6 @@
 ﻿namespace TheEndOfMine;
 
+using Microsoft.Maui.Storage;
 using TheEndOfMine.ViewModels;
 using TheEndOfMine.Data;
 using TheEndOfMine.Models;
@@ -8,6 +9,8 @@ using TheEndOfMine.Views;
 
 public partial class MainPage : ContentPage
 {
+    private const string TutorialSeenPreferenceKey = "main_tutorial_seen";
+
     private readonly MainViewModel _vm;
     private readonly GameDatabase _db;
     private bool _hasLoadedScene;
@@ -93,6 +96,7 @@ public partial class MainPage : ContentPage
 
         // 5. ปิดการแสดงผลเพื่อไม่ให้ขวางการทัชสกรีนบนปุ่มต่างๆ
         LoadingOverlay.IsVisible = false;
+        await ShowTutorialIfNeededAsync();
     }
 
     private async Task SetLoadingProgressAsync(double progress, string detail)
@@ -101,6 +105,25 @@ public partial class MainPage : ContentPage
         LoadingDetailLabel.Text = detail;
         LoadingPercentLabel.Text = $"{(int)Math.Round(progress * 100)}%";
         await LoadingProgress.ProgressTo(progress, 260, Easing.CubicOut);
+    }
+
+    private async Task ShowTutorialIfNeededAsync()
+    {
+        if (Preferences.Get(TutorialSeenPreferenceKey, false))
+            return;
+
+        TutorialOverlay.IsVisible = true;
+        TutorialOverlay.InputTransparent = false;
+        await TutorialOverlay.FadeTo(1, 180, Easing.CubicOut);
+    }
+
+    private async void OnTutorialOkClicked(object sender, EventArgs e)
+    {
+        AudioFeedbackService.PlayButtonTap();
+        Preferences.Set(TutorialSeenPreferenceKey, true);
+        await TutorialOverlay.FadeTo(0, 130, Easing.CubicIn);
+        TutorialOverlay.IsVisible = false;
+        TutorialOverlay.InputTransparent = true;
     }
 
     protected override async void OnDisappearing()
