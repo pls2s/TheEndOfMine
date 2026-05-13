@@ -16,6 +16,7 @@ public partial class IntroPage : ContentPage
     public IntroPage()
     {
         InitializeComponent();
+        SplashWebView.Source = CreateSplashVideoSource();
         StartBlinkingAnimation();
 
         // โหลดรูปผู้หญิงรอไว้หลังม่าน
@@ -49,6 +50,59 @@ public partial class IntroPage : ContentPage
 
         TitleLayer.IsVisible = false;
         TitleLayer.InputTransparent = true;
+        SplashWebView.Source = new HtmlWebViewSource { Html = "<html><body style='background:black'></body></html>" };
+    }
+
+    private static HtmlWebViewSource CreateSplashVideoSource()
+    {
+        var videoUrl = GetSplashVideoUrl();
+
+        return new HtmlWebViewSource
+        {
+            Html = $@"
+<!doctype html>
+<html>
+<head>
+    <meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no'>
+    <style>
+        html, body {{
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            overflow: hidden;
+        }}
+
+        video {{
+            width: 100vw;
+            height: 100vh;
+            object-fit: cover;
+            pointer-events: none;
+        }}
+    </style>
+</head>
+<body>
+    <video autoplay loop muted playsinline preload='auto'>
+        <source src='{videoUrl}' type='video/mp4'>
+    </video>
+</body>
+</html>"
+        };
+    }
+
+    private static string GetSplashVideoUrl()
+    {
+#if ANDROID
+        return "file:///android_asset/splash.mp4";
+#elif IOS || MACCATALYST
+        var path = Foundation.NSBundle.MainBundle.PathForResource("splash", "mp4");
+        return string.IsNullOrWhiteSpace(path) ? "splash.mp4" : new Uri(path).AbsoluteUri;
+#elif WINDOWS
+        return "ms-appx-web:///splash.mp4";
+#else
+        return "splash.mp4";
+#endif
     }
 
     // ฟังก์ชันคลิกเลือกตัวละครชาย

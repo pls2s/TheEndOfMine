@@ -117,6 +117,18 @@
                             FontAttributes="Bold"
                             CornerRadius="7"
                             Padding="10,8" />
+
+                    <Button x:Name="SoundToggleButton"
+                            Text="SOUND ON"
+                            Clicked="OnSoundToggleClicked"
+                            BackgroundColor="#241F19"
+                            BorderColor="#4E493F"
+                            BorderWidth="1"
+                            TextColor="#EFE8D8"
+                            FontSize="11"
+                            FontAttributes="Bold"
+                            CornerRadius="7"
+                            Padding="10,8" />
                 </VerticalStackLayout>
             </Border>
 

@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Microsoft.Maui.Storage;
 using TheEndOfMine.Models;
 
 namespace TheEndOfMine.Data;
@@ -19,9 +20,7 @@ public class GameDatabase
     {
         if (string.IsNullOrWhiteSpace(saveFolder))
         {
-            // Default to %AppData%/TheEndOfMine for desktop; this is safe cross-platform fallback for MAUI too.
-            var baseDir = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-            saveFolder = Path.Combine(baseDir, "TheEndOfMine");
+            saveFolder = GetDefaultSaveFolder();
         }
 
         _saveFolder = saveFolder;
@@ -31,6 +30,19 @@ public class GameDatabase
     private string SurvivorPath => Path.Combine(_saveFolder, "survivor.json");
     private string GameStatePath => Path.Combine(_saveFolder, "gamestate.json");
     private string InventoryPath => Path.Combine(_saveFolder, "inventory.json");
+
+    private static string GetDefaultSaveFolder()
+    {
+        try
+        {
+            return FileSystem.AppDataDirectory;
+        }
+        catch
+        {
+            var baseDir = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            return Path.Combine(baseDir, "TheEndOfMine");
+        }
+    }
 
     public async Task SaveAsync(Survivor survivor, GameState state, Inventory? inventory = null)
     {
