@@ -1,7 +1,10 @@
 namespace TheEndOfMine.Services;
 
+using Microsoft.Maui.Storage;
+
 public static class AudioFeedbackService
 {
+    private const string MutedPreferenceKey = "audio_muted";
     private const string ButtonTapPath = "audio/ui/sound_select_1.wav";
     private const string StoryChoicePath = "audio/ui/sound_select_2.wav";
     private const string BackgroundMusicPath = "audio/bgm/Cold_Iron_Drips.mp3";
@@ -11,6 +14,42 @@ public static class AudioFeedbackService
     private static readonly object BackgroundLock = new();
     private static Android.Media.MediaPlayer? _backgroundPlayer;
 #endif
+
+    public static bool IsMuted
+    {
+        get
+        {
+            try
+            {
+                return Preferences.Get(MutedPreferenceKey, false);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+    }
+
+    public static bool ToggleMuted()
+    {
+        var isMuted = !IsMuted;
+
+        try
+        {
+            Preferences.Set(MutedPreferenceKey, isMuted);
+        }
+        catch
+        {
+            // If preferences are unavailable, keep gameplay running and only apply in-memory effect where possible.
+        }
+
+        if (isMuted)
+            PauseBackgroundLoop();
+        else
+            StartBackgroundLoop();
+
+        return isMuted;
+    }
 
     public static void PlayButtonTap()
     {
@@ -24,6 +63,9 @@ public static class AudioFeedbackService
 
     public static void StartBackgroundLoop()
     {
+        if (IsMuted)
+            return;
+
 #if ANDROID
         _ = Task.Run(StartBackgroundLoopAndroid);
 #endif
@@ -57,6 +99,9 @@ public static class AudioFeedbackService
 
     private static void Play(string assetPath)
     {
+        if (IsMuted)
+            return;
+
 #if ANDROID
         _ = Task.Run(() => PlayAndroid(assetPath));
 #endif

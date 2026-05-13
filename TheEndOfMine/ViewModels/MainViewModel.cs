@@ -13,6 +13,8 @@ namespace TheEndOfMine.ViewModels;
 
 public class MainViewModel : INotifyPropertyChanged
 {
+    private static readonly TimeSpan AutoSaveInterval = TimeSpan.FromSeconds(15);
+
     public event PropertyChangedEventHandler? PropertyChanged;
 
     private readonly SaveService _saveService;
@@ -29,6 +31,8 @@ public class MainViewModel : INotifyPropertyChanged
     private string _chapterLoadingDetail = "กำลังเตรียม chapter ถัดไป";
     private string _chapterLoadingImage = "story/chapter/chapter_ruined_city_sunset.png";
     private CancellationTokenSource? _chapterLoadingPulseCts;
+    private DateTime _lastAutoSaveUtc = DateTime.MinValue;
+    private bool _isAutoSaving;
 
     public MainViewModel()
     {
@@ -82,6 +86,7 @@ public class MainViewModel : INotifyPropertyChanged
 
         _engine.SaveCheckpoint();
         await SaveGameDatabaseAsync(_engine.CurrentState);
+        _lastAutoSaveUtc = DateTime.UtcNow;
     }
 
     public async Task ToggleStopAsync()
@@ -293,6 +298,40 @@ public class MainViewModel : INotifyPropertyChanged
         await db.SaveAsync(state.Survivor, state, state.Survivor.Inventory);
     }
 
+    private void QueueAutoSave(GameState state)
+    {
+        if (_engine?.CurrentState == null ||
+            state.Status is not (GameStatus.Running or GameStatus.Paused) ||
+            _isAutoSaving)
+        {
+            return;
+        }
+
+        var now = DateTime.UtcNow;
+        if (now - _lastAutoSaveUtc < AutoSaveInterval)
+            return;
+
+        _lastAutoSaveUtc = now;
+        _isAutoSaving = true;
+        _ = AutoSaveAsync();
+    }
+
+    private async Task AutoSaveAsync()
+    {
+        try
+        {
+            if (_engine?.CurrentState == null)
+                return;
+
+            _engine.SaveCheckpoint();
+            await SaveGameDatabaseAsync(_engine.CurrentState);
+        }
+        finally
+        {
+            _isAutoSaving = false;
+        }
+    }
+
     private void OnMessageIssued(string msg) { }
 
     private void OnPlayerDied() { }
@@ -379,6 +418,7 @@ public class MainViewModel : INotifyPropertyChanged
         Raise(nameof(IsPaused));
         Raise(nameof(StopButtonText));
         _goOutsideCommand.ChangeCanExecute();
+        QueueAutoSave(gs);
     }
 
     private void OnGameOverOccurred()

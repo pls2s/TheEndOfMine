@@ -19,6 +19,7 @@ public partial class MainPage : ContentPage
         _db = new GameDatabase();
         _vm = new MainViewModel();
         BindingContext = _vm;
+        UpdateSoundToggleButton();
     }
 
     protected override async void OnAppearing()
@@ -102,9 +103,10 @@ public partial class MainPage : ContentPage
         await LoadingProgress.ProgressTo(progress, 260, Easing.CubicOut);
     }
 
-    protected override void OnDisappearing()
+    protected override async void OnDisappearing()
     {
         base.OnDisappearing();
+        await _vm.SaveGameAsync();
         _vm?.Dispose();
     }
     private void OnRest4HClicked(object sender, EventArgs e)
@@ -155,6 +157,19 @@ public partial class MainPage : ContentPage
         SaveGameButton.Text = "SAVE GAME";
         SaveGameButton.IsEnabled = true;
         await HideGameMenuAsync();
+    }
+
+    private async void OnSoundToggleClicked(object sender, EventArgs e)
+    {
+        AudioFeedbackService.PlayButtonTap();
+        AudioFeedbackService.ToggleMuted();
+        UpdateSoundToggleButton();
+        await HideGameMenuAsync();
+    }
+
+    private void UpdateSoundToggleButton()
+    {
+        SoundToggleButton.Text = AudioFeedbackService.IsMuted ? "SOUND OFF" : "SOUND ON";
     }
 
     private void OnGoOutsideClicked(object sender, EventArgs e)
