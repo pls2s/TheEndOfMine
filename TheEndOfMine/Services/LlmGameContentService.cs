@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.Maui.Storage;
 using TheEndOfMine.Models;
 
@@ -89,7 +90,8 @@ public class LlmGameContentService
             var missingKeyMessage = settings.Provider == ProviderOpenAi
                 ? "ไม่พบ OPENAI_API_KEY หรือ LLM_API_KEY"
                 : "ไม่พบ TYPHOON_API_KEY หรือ LLM_API_KEY";
-            return CreateFallbackContent(survivor, chapterNumber, eventsPerChapter, assetCatalog, missingKeyMessage, state);
+            return await CreateFallbackContentAsync(survivor, chapterNumber, eventsPerChapter, assetCatalog, missingKeyMessage, state, cancellationToken)
+                .ConfigureAwait(false);
         }
 
         try
@@ -122,13 +124,14 @@ public class LlmGameContentService
         }
         catch (Exception ex)
         {
-            return CreateFallbackContent(
+            return await CreateFallbackContentAsync(
                 survivor,
                 chapterNumber,
                 eventsPerChapter,
                 assetCatalog,
                 $"เรียก {settings.Provider} ไม่สำเร็จ: {ex.Message}",
-                state);
+                state,
+                cancellationToken).ConfigureAwait(false);
         }
     }
 
@@ -677,7 +680,205 @@ public class LlmGameContentService
         ItemRewardConsistencyService.Normalize(item);
     }
 
-    private GeneratedGameContent CreateFallbackContent(
+    private async Task<GeneratedGameContent> CreateFallbackContentAsync(
+        Survivor survivor,
+        int chapterNumber,
+        int eventsPerChapter,
+        StoryAssetCatalog assetCatalog,
+        string fallbackReason = "",
+        GameState? state = null,
+        CancellationToken cancellationToken = default)
+    {
+        var storyTreeContent = await TryCreateStoryTreeFallbackContentAsync(
+            survivor,
+            chapterNumber,
+            eventsPerChapter,
+            assetCatalog,
+            fallbackReason,
+            state,
+            cancellationToken).ConfigureAwait(false);
+
+        if (storyTreeContent != null)
+            return storyTreeContent;
+
+        var eventsJsonContent = await TryCreateEventsJsonFallbackContentAsync(
+            survivor,
+            chapterNumber,
+            eventsPerChapter,
+            assetCatalog,
+            fallbackReason,
+            state,
+            cancellationToken).ConfigureAwait(false);
+
+        return eventsJsonContent ?? CreateRandomFallbackContent(survivor, chapterNumber, eventsPerChapter, assetCatalog, fallbackReason, state);
+    }
+
+    private async Task<GeneratedGameContent?> TryCreateStoryTreeFallbackContentAsync(
+        Survivor survivor,
+        int chapterNumber,
+        int eventsPerChapter,
+        StoryAssetCatalog assetCatalog,
+        string fallbackReason,
+        GameState? state,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await using var stream = await FileSystem.OpenAppPackageFileAsync("story_tree.json").ConfigureAwait(false);
+            var root = await JsonNode.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
+            var eventsObject = root?["events"]?.AsObject();
+            if (eventsObject == null || eventsObject.Count == 0)
+                return null;
+
+            var allEvents = eventsObject
+                .Select(kvp => CreateGameEventFromStoryTreeNode(kvp.Value, survivor.Name))
+                .Where(gameEvent => gameEvent is { Choices.Count: > 0 })
+                .Cast<GameEvent>()
+                .ToList();
+
+            if (allEvents.Count == 0)
+                return null;
+
+            var startIndex = Math.Max(0, (chapterNumber - 1) * eventsPerChapter);
+            var events = allEvents
+                .Skip(startIndex)
+                .Take(eventsPerChapter)
+                .ToList();
+
+            if (events.Count < eventsPerChapter)
+                events.AddRange(allEvents.Take(eventsPerChapter - events.Count));
+
+            var content = new GeneratedGameContent
+            {
+                StoryTitle = $"บทที่ {chapterNumber}: เส้นทางจาก Story Tree",
+                UsedRemoteLlm = false,
+                Events = events,
+                StartingItems = chapterNumber == 1 ? CreateStoryTreeStartingItems() : new List<Item>(),
+                FallbackReason = $"{fallbackReason}\nใช้ story_tree.json แทน Typhoon API"
+            };
+
+            NormalizeContent(content, survivor, eventsPerChapter, assetCatalog, state);
+            content.UsedRemoteLlm = false;
+            return content;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private async Task<GeneratedGameContent?> TryCreateEventsJsonFallbackContentAsync(
+        Survivor survivor,
+        int chapterNumber,
+        int eventsPerChapter,
+        StoryAssetCatalog assetCatalog,
+        string fallbackReason,
+        GameState? state,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await using var stream = await FileSystem.OpenAppPackageFileAsync("events.json").ConfigureAwait(false);
+            var events = await JsonSerializer.DeserializeAsync<List<GameEvent>>(stream, JsonOptions, cancellationToken).ConfigureAwait(false);
+            if (events is not { Count: > 0 })
+                return null;
+
+            var selectedEvents = events.Take(eventsPerChapter).ToList();
+            var content = new GeneratedGameContent
+            {
+                StoryTitle = $"บทที่ {chapterNumber}: เส้นทางจาก Events JSON",
+                UsedRemoteLlm = false,
+                Events = selectedEvents,
+                StartingItems = chapterNumber == 1 ? CreateStoryTreeStartingItems() : new List<Item>(),
+                FallbackReason = $"{fallbackReason}\nใช้ events.json แทน Typhoon API"
+            };
+
+            NormalizeContent(content, survivor, eventsPerChapter, assetCatalog, state);
+            content.UsedRemoteLlm = false;
+            return content;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static GameEvent? CreateGameEventFromStoryTreeNode(JsonNode? node, string survivorName)
+    {
+        if (node is not JsonObject obj)
+            return null;
+
+        var choices = obj["choices"]?.AsArray()
+            .Select(choice => CreateEventChoiceFromStoryTreeNode(choice, survivorName))
+            .Where(choice => choice != null)
+            .Cast<EventChoice>()
+            .ToList() ?? new List<EventChoice>();
+
+        return new GameEvent
+        {
+            Id = ReadString(obj, "id"),
+            Title = ReadString(obj, "title"),
+            Description = ReplaceSurvivorName(ReadString(obj, "description"), survivorName),
+            ImageAlias = ReadString(obj, "image_hint"),
+            Choices = choices
+        };
+    }
+
+    private static EventChoice? CreateEventChoiceFromStoryTreeNode(JsonNode? node, string survivorName)
+    {
+        if (node is not JsonObject obj)
+            return null;
+
+        var effects = obj["effects"] as JsonObject;
+        return new EventChoice
+        {
+            Id = ReadString(obj, "id"),
+            Text = ReplaceSurvivorName(ReadString(obj, "text"), survivorName),
+            HpEffect = ReadFloat(effects, "hp"),
+            HungerEffect = ReadFloat(effects, "hunger"),
+            ThirstEffect = ReadFloat(effects, "thirst"),
+            FatigueEffect = Math.Abs(ReadFloat(effects, "fatigue")),
+            ResultText = ReplaceSurvivorName(ReadString(obj, "narrative"), survivorName)
+        };
+    }
+
+    private static List<Item> CreateStoryTreeStartingItems()
+    {
+        return new List<Item>
+        {
+            CreateFallbackItem("น้ำกรองขวดเล็ก", "story_tree_start_water"),
+            CreateFallbackItem("อาหารกระป๋องบุบ", "story_tree_start_food"),
+            CreateFallbackItem("มีดทำครัว", "story_tree_start_knife")
+        };
+    }
+
+    private static string ReadString(JsonObject obj, string propertyName)
+    {
+        return obj[propertyName]?.GetValue<string>() ?? string.Empty;
+    }
+
+    private static float ReadFloat(JsonObject? obj, string propertyName)
+    {
+        if (obj?[propertyName] == null)
+            return 0f;
+
+        try
+        {
+            return obj[propertyName]!.GetValue<float>();
+        }
+        catch
+        {
+            return 0f;
+        }
+    }
+
+    private static string ReplaceSurvivorName(string value, string survivorName)
+    {
+        var name = string.IsNullOrWhiteSpace(survivorName) ? "คุณ" : survivorName;
+        return value.Replace("[ชื่อ]", name, StringComparison.Ordinal);
+    }
+
+    private GeneratedGameContent CreateRandomFallbackContent(
         Survivor survivor,
         int chapterNumber,
         int eventsPerChapter,
