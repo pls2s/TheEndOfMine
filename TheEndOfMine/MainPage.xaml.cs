@@ -15,6 +15,7 @@ public partial class MainPage : ContentPage
     private readonly GameDatabase _db;
     private readonly TutorialDimDrawable _tutorialDimDrawable = new();
     private bool _hasLoadedScene;
+    private bool _isStopPopupAnimating;
     private int _tutorialStepIndex;
     private TutorialStep[] _tutorialSteps = [];
 
@@ -340,6 +341,22 @@ public partial class MainPage : ContentPage
         AudioFeedbackService.PlayButtonTap();
         await _vm.ToggleStopAsync();
         await HideGameMenuAsync();
+        await ShowStopStatusPopupAsync(_vm.IsPaused);
+    }
+
+    private async void OnStopPopupCloseClicked(object sender, EventArgs e)
+    {
+        AudioFeedbackService.PlayButtonTap();
+        await HideStopStatusPopupAsync();
+    }
+
+    private async void OnStopPopupResumeClicked(object sender, EventArgs e)
+    {
+        AudioFeedbackService.PlayButtonTap();
+        if (_vm.IsPaused)
+            await _vm.ToggleStopAsync();
+
+        await HideStopStatusPopupAsync();
     }
 
     private async void OnSaveGameClicked(object sender, EventArgs e)
@@ -411,6 +428,63 @@ public partial class MainPage : ContentPage
             GameMenuPanel.TranslateTo(0, -8, 90, Easing.CubicIn));
 
         GameMenuPanel.IsVisible = false;
+    }
+
+    private async Task ShowStopStatusPopupAsync(bool isPaused)
+    {
+        if (_isStopPopupAnimating)
+            return;
+
+        StopStatusTitleLabel.Text = isPaused ? "หยุดเกมแล้ว" : "กลับมาเล่นต่อแล้ว";
+        StopStatusDetailLabel.Text = isPaused
+            ? "เวลาในเกมถูกพักไว้ชั่วคราว คุณยังสามารถบันทึกเกมหรือกดเล่นต่อได้"
+            : "เวลาในเกมกลับมาเดินต่อแล้ว";
+        StopPopupResumeButton.IsVisible = isPaused;
+        StopPopupResumeButton.IsEnabled = isPaused;
+        StopPopupCloseButton.Text = isPaused ? "ปิด" : "ตกลง";
+
+        StopStatusOverlay.IsVisible = true;
+        StopStatusOverlay.InputTransparent = false;
+        StopStatusOverlay.Opacity = 0;
+        StopStatusCard.Scale = 0.94;
+
+        _isStopPopupAnimating = true;
+        try
+        {
+            await Task.WhenAll(
+                StopStatusOverlay.FadeTo(1, 140, Easing.CubicOut),
+                StopStatusCard.ScaleTo(1, 140, Easing.CubicOut));
+        }
+        finally
+        {
+            _isStopPopupAnimating = false;
+        }
+
+        if (!isPaused)
+        {
+            await Task.Delay(700);
+            await HideStopStatusPopupAsync();
+        }
+    }
+
+    private async Task HideStopStatusPopupAsync()
+    {
+        if (!StopStatusOverlay.IsVisible || _isStopPopupAnimating)
+            return;
+
+        _isStopPopupAnimating = true;
+        try
+        {
+            await Task.WhenAll(
+                StopStatusOverlay.FadeTo(0, 110, Easing.CubicIn),
+                StopStatusCard.ScaleTo(0.96, 110, Easing.CubicIn));
+        }
+        finally
+        {
+            StopStatusOverlay.IsVisible = false;
+            StopStatusOverlay.InputTransparent = true;
+            _isStopPopupAnimating = false;
+        }
     }
 
     private void ConfirmRest(int hours)
