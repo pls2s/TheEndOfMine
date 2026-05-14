@@ -110,8 +110,18 @@ public class LlmGameContentService
         Timeout = TimeSpan.FromSeconds(120)
     };
 
+    private static readonly SemaphoreSlim SettingsLock = new(1, 1);
+    private static LlmRuntimeSettings? _cachedSettings;
+
     private readonly ImageGenerationService _imageGenerationService;
     private readonly StoryAssetResolver _storyAssetResolver;
+
+    private enum ChapterGenerationMode
+    {
+        Full,
+        Opening,
+        Continuation
+    }
 
     public LlmGameContentService(
         ImageGenerationService? imageGenerationService = null,
@@ -123,14 +133,82 @@ public class LlmGameContentService
 
     public async Task<GeneratedGameContent> GenerateNewGameAsync(Survivor survivor, CancellationToken cancellationToken = default)
     {
-        return await GenerateChapterContentAsync(survivor, chapterNumber: 1, maxChapters: 4, eventsPerChapter: 8, state: null, cancellationToken)
+        return await GenerateChapterContentAsync(
+                survivor,
+                chapterNumber: 1,
+                maxChapters: 4,
+                eventCountToGenerate: 8,
+                state: null,
+                cancellationToken,
+                fullEventsPerChapter: 8,
+                startEventNumber: 1,
+                mode: ChapterGenerationMode.Full)
+            .ConfigureAwait(false);
+    }
+
+    public async Task<GeneratedGameContent> GenerateNewGameOpeningAsync(
+        Survivor survivor,
+        int fullEventsPerChapter = 8,
+        int openingEventCount = 3,
+        CancellationToken cancellationToken = default)
+    {
+        var eventCount = Math.Clamp(openingEventCount, 1, fullEventsPerChapter);
+        return await GenerateChapterContentAsync(
+                survivor,
+                chapterNumber: 1,
+                maxChapters: 4,
+                eventCountToGenerate: eventCount,
+                state: null,
+                cancellationToken,
+                fullEventsPerChapter,
+                startEventNumber: 1,
+                mode: eventCount >= fullEventsPerChapter ? ChapterGenerationMode.Full : ChapterGenerationMode.Opening)
             .ConfigureAwait(false);
     }
 
     public async Task<GeneratedGameContent> GenerateNextChapterAsync(GameState state, CancellationToken cancellationToken = default)
     {
         var nextChapter = Math.Clamp(state.CurrentChapter + 1, 1, state.MaxChapters);
-        return await GenerateChapterContentAsync(state.Survivor, nextChapter, state.MaxChapters, state.EventsPerChapter, state, cancellationToken)
+        return await GenerateChapterContentAsync(
+                state.Survivor,
+                nextChapter,
+                state.MaxChapters,
+                state.EventsPerChapter,
+                state,
+                cancellationToken,
+                state.EventsPerChapter,
+                startEventNumber: 1,
+                mode: ChapterGenerationMode.Full)
+            .ConfigureAwait(false);
+    }
+
+    public async Task<GeneratedGameContent> GenerateCurrentChapterContinuationAsync(
+        GameState state,
+        CancellationToken cancellationToken = default)
+    {
+        var existingEventCount = state.GeneratedEvents.Count;
+        var remainingEventCount = Math.Max(0, state.EventsPerChapter - existingEventCount);
+        if (remainingEventCount == 0)
+        {
+            return new GeneratedGameContent
+            {
+                StoryTitle = state.CurrentChapterTitle,
+                ChapterAlias = state.CurrentChapterAlias,
+                ChapterImagePath = state.CurrentChapterImagePath,
+                UsedRemoteLlm = state.StorySource.Equals("llm", StringComparison.OrdinalIgnoreCase)
+            };
+        }
+
+        return await GenerateChapterContentAsync(
+                state.Survivor,
+                state.CurrentChapter,
+                state.MaxChapters,
+                remainingEventCount,
+                state,
+                cancellationToken,
+                state.EventsPerChapter,
+                startEventNumber: existingEventCount + 1,
+                mode: ChapterGenerationMode.Continuation)
             .ConfigureAwait(false);
     }
 
@@ -138,9 +216,12 @@ public class LlmGameContentService
         Survivor survivor,
         int chapterNumber,
         int maxChapters,
-        int eventsPerChapter,
+        int eventCountToGenerate,
         GameState? state,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        int fullEventsPerChapter,
+        int startEventNumber,
+        ChapterGenerationMode mode)
     {
         var assetCatalog = await _storyAssetResolver.LoadCatalogAsync(cancellationToken).ConfigureAwait(false);
         var settings = await LoadSettingsAsync(cancellationToken).ConfigureAwait(false);
@@ -149,13 +230,22 @@ public class LlmGameContentService
             var missingKeyMessage = settings.Provider == ProviderOpenAi
                 ? "ไม่พบ OPENAI_API_KEY หรือ LLM_API_KEY"
                 : "ไม่พบ TYPHOON_API_KEY หรือ LLM_API_KEY";
-            return await CreateFallbackContentAsync(survivor, chapterNumber, eventsPerChapter, assetCatalog, missingKeyMessage, state, cancellationToken)
+            return await CreateFallbackContentAsync(survivor, chapterNumber, eventCountToGenerate, assetCatalog, missingKeyMessage, state, cancellationToken, startEventNumber, mode)
                 .ConfigureAwait(false);
         }
 
         try
         {
-            var prompt = BuildPrompt(survivor, chapterNumber, maxChapters, eventsPerChapter, state, assetCatalog);
+            var prompt = BuildPrompt(
+                survivor,
+                chapterNumber,
+                maxChapters,
+                eventCountToGenerate,
+                fullEventsPerChapter,
+                startEventNumber,
+                mode,
+                state,
+                assetCatalog);
             var requestJson = JsonSerializer.Serialize(CreateLlmRequest(settings, prompt), JsonOptions);
             var responseJson = await SendLlmRequestWithRetryAsync(settings, requestJson, cancellationToken).ConfigureAwait(false);
             var contentJson = ExtractMessageContent(responseJson);
@@ -164,9 +254,9 @@ public class LlmGameContentService
             if (generated == null)
                 throw new InvalidOperationException("LLM response was empty.");
 
-            NormalizeContent(generated, survivor, eventsPerChapter, assetCatalog, state);
+            NormalizeContent(generated, survivor, chapterNumber, eventCountToGenerate, assetCatalog, state, startEventNumber, mode);
             await _imageGenerationService.GenerateChapterImagesAsync(
-                state ?? CreateImageState(survivor, chapterNumber, maxChapters, eventsPerChapter),
+                state ?? CreateImageState(survivor, chapterNumber, maxChapters, fullEventsPerChapter),
                 generated,
                 cancellationToken).ConfigureAwait(false);
 
@@ -178,11 +268,13 @@ public class LlmGameContentService
             return await CreateFallbackContentAsync(
                 survivor,
                 chapterNumber,
-                eventsPerChapter,
+                eventCountToGenerate,
                 assetCatalog,
                 $"เรียก {settings.Provider} ไม่สำเร็จ: {ex.Message}",
                 state,
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken,
+                startEventNumber,
+                mode).ConfigureAwait(false);
         }
     }
 
@@ -271,7 +363,6 @@ public class LlmGameContentService
             {
                 using var request = new HttpRequestMessage(HttpMethod.Post, settings.Endpoint);
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", settings.ApiKey);
-                request.Headers.ConnectionClose = true;
                 request.Content = new StringContent(requestJson, Encoding.UTF8, "application/json");
 
                 using var response = await HttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
@@ -314,10 +405,14 @@ public class LlmGameContentService
         Survivor survivor,
         int chapterNumber,
         int maxChapters,
-        int eventsPerChapter,
+        int eventCountToGenerate,
+        int fullEventsPerChapter,
+        int startEventNumber,
+        ChapterGenerationMode mode,
         GameState? state,
         StoryAssetCatalog assetCatalog)
     {
+        var endEventNumber = startEventNumber + eventCountToGenerate - 1;
         var phase = chapterNumber switch
         {
             1 => "ตื่นรอด / ตั้งหลัก",
@@ -330,14 +425,15 @@ public class LlmGameContentService
             ? "เริ่มเกมใหม่ ยังไม่มีประวัติการเล่น"
             : BuildStateSummary(state);
         var storyMemory = BuildStoryMemoryForPrompt(state);
+        var existingChapterEvents = BuildExistingChapterEventsForPrompt(state, startEventNumber);
         var inventoryRules = BuildInventoryUseRules(state);
         var resourcePressureRule = BuildResourcePressureRule(state);
-        var startingItemsRule = chapterNumber == 1
+        var startingItemsRule = chapterNumber == 1 && mode != ChapterGenerationMode.Continuation
             ? "- สร้าง startingItems 3 ชิ้น"
-            : "- startingItems ต้องเป็น array ว่าง [] เพราะไม่ใช่ chapter แรก";
-        var endingRule = chapterNumber >= maxChapters
-            ? "- chapter นี้เป็นบทสุดท้าย event ที่ 8 ต้องเป็นเหตุการณ์ปลายทางที่นำไปสู่ฉากจบ"
-            : "- event ที่ 8 ต้องเปิดทางไป chapter ถัดไป แต่ยังไม่จบเกม";
+            : "- startingItems ต้องเป็น array ว่าง [] เพราะช่วงนี้ไม่ใช่จุดเริ่มเกม";
+        var endingRule = BuildEndingRule(chapterNumber, maxChapters, fullEventsPerChapter, endEventNumber, mode);
+        var generationScopeRule = BuildGenerationScopeRule(eventCountToGenerate, fullEventsPerChapter, startEventNumber, endEventNumber, mode);
+        var rewardTargetRule = BuildRewardTargetRule(eventCountToGenerate, mode);
         var assetAliasRules = _storyAssetResolver.FormatPromptAliases(assetCatalog);
 
         return $$"""
@@ -345,10 +441,13 @@ public class LlmGameContentService
         ชื่อตัวละคร: {{survivor.Name}}
         เพศตัวละคร: {{survivor.Gender}}
         Chapter: {{chapterNumber}}/{{maxChapters}}
+        ช่วง event ที่ต้องสร้างตอนนี้: {{startEventNumber}}-{{endEventNumber}} จากทั้งหมด {{fullEventsPerChapter}} event ใน chapter นี้
         ธีมของ chapter นี้: {{phase}}
         สถานะเกมปัจจุบัน: {{currentStatus}}
         ความทรงจำเนื้อเรื่องล่าสุด:
         {{storyMemory}}
+        เหตุการณ์ใน chapter นี้ที่สร้างไว้แล้ว:
+        {{existingChapterEvents}}
         ไอเทมที่มีและวิธีใช้ที่สมเหตุผล:
         {{inventoryRules}}
 
@@ -362,7 +461,7 @@ public class LlmGameContentService
         - ใช้คำว่า "ร่าง" หรือ "ศพ" ให้เหมาะกับสถานการณ์ ห้ามเขียนประโยคสะดุด เช่น "ศพผู้หญิงคนนึ่ง"
         - storyTitle ให้เป็นชื่อ chapter นี้
         - chapter_alias ต้องเลือกจากรายการ chapter_alias ด้านบนให้เข้ากับบรรยากาศ chapter
-        - สร้าง event ให้ครบ {{eventsPerChapter}} เหตุการณ์
+        {{generationScopeRule}}
         - ทุก event ต้องมี story_alias ที่เลือกจากรายการ event.story_alias ด้านบน และต้องสัมพันธ์กับสถานการณ์ใน event
         - แต่ละ event ต้องมี choice 2 ตัวเลือกพอดี
         - แต่ละ choice ต้องมี id, text, hpEffect, hungerEffect, thirstEffect, fatigueEffect, resultText
@@ -373,20 +472,25 @@ public class LlmGameContentService
         - ถ้าผู้เล่น Infection สูง ให้เขียนอาการเช่นหนาวสั่น ไข้ แผลบวม มือสั่น หรือการตัดสินใจที่ยากขึ้น
         {{resourcePressureRule}}
         - ตัวเลือกที่ใช้ยา ทำแผล พันแผล หรือปฐมพยาบาลต้องลดความเสี่ยงติดเชื้อใน resultText และห้ามรักษาหายทันทีแบบเวทมนตร์
-        - ใส่ itemRewards รวมทั้ง chapter อย่างน้อย 10 ชิ้น โดย itemRewards เป็น array ของ item object ครบถ้วน และ 1 choice ให้ได้ 1-3 ชิ้นได้ตามบริบท
+        {{rewardTargetRule}}
         - ทุก itemRewards, itemReward และ startingItems ต้องมี story_alias ที่เลือกจากรายการ item.story_alias ด้านบน
         - story_alias ของไอเทมต้องตรงกับชื่อและคำอธิบาย เช่น ชุดปฐมพยาบาลต้องใช้ first_aid_kit, ผ้าพันแผลต้องใช้ bandage, ขวดน้ำต้องใช้ water_bottle, อาหารกระป๋องต้องใช้ canned_food, ไฟฉายต้องใช้ flashlight
         - ถ้า choice ให้ itemRewards/itemReward ต้องเขียน resultText ให้ระบุชื่อไอเทมเหล่านั้นตรง ๆ ห้ามเล่าอย่างหนึ่งแต่ให้ของอีกอย่าง
         - choice อื่นที่ไม่ได้ให้ไอเทมห้ามใส่ key itemRewards หรือ itemReward
+        - ถ้า choice ต้องใช้ไอเทมที่ผู้เล่นมีอยู่แล้ว ให้ใส่ requiredItemId เป็น id, name_th, name_en หรือ story_alias ของไอเทมนั้น ถ้าไม่ต้องใช้ให้เป็น ""
+        - ถ้า choice กินอาหาร ดื่มน้ำ ใช้ยา ทำแผล หรือใช้ของที่หมดไป ให้ใส่ consumedItemId เป็นไอเทมที่ถูกใช้หมด และ item นั้นต้องไม่ใช่ itemRewards ที่เพิ่งได้รับใน choice เดียวกัน
+        - ถ้า choice ใช้เครื่องมือหรืออาวุธที่ไม่หมดทันที แต่ควรเสีย durability ให้ใส่ usedItemId เป็นไอเทมนั้น เช่น ไฟฉาย มีด เชือก ไขควง คีม ชะแลง
+        - itemRewards คือของที่ได้รับหลังจบ choice เท่านั้น ห้ามใช้ itemRewards เป็น requiredItemId, consumedItemId หรือ usedItemId ใน choice เดียวกัน
         - ทุก event ต้องมี imagePrompt เป็นภาษาอังกฤษ สำหรับสร้างภาพประกอบแบบ realistic gritty survival game art, no text, no UI, no logo
         - ทุก item ใน startingItems, itemRewards และ itemReward ต้องมี image_prompt เป็นภาษาอังกฤษ สำหรับสร้างภาพไอเทมเดี่ยวบนพื้นหลังเรียบ, no text, no logo
         {{startingItemsRule}}
         {{endingRule}}
         - chapter นี้ต้องมีเป้าหมายหลักหนึ่งอย่างที่ชัดเจน และทุก event ต้องผลักผู้เล่นเข้าใกล้หรือไกลจากเป้าหมายนั้น
-        - เหตุการณ์ทั้งหมดต้องเรียงเป็นเหตุและผลต่อเนื่องกัน ไม่ใช่ฉากสุ่มคนละเรื่อง
-        - event ที่ 2 เป็นต้นไปต้องอ้างอิงผลจาก event ก่อนหน้า เช่น คนเดิม ร่องรอยเดิม สถานที่ต่อเนื่อง ไอเทม/เบาะแสที่เพิ่งได้ หรือผลเสียจากตัวเลือกก่อนหน้า
+        - เหตุการณ์ทั้งหมดต้องเรียงเป็นเหตุและผลต่อเนื่องกันด้วยสถานที่ เป้าหมาย ภัยคุกคาม ร่องรอย หรือ NPC ร่วมกัน ไม่ใช่ฉากสุ่มคนละเรื่อง
+        - ระบบสร้างทั้ง chapter ล่วงหน้าก่อนรู้ว่าผู้เล่นจะเลือก choice ใด ดังนั้น event ที่ 2 เป็นต้นไปห้ามอ้างว่าผู้เล่นเลือกทางใดทางหนึ่งใน event ก่อนหน้า ห้ามอ้างผลเสีย ผลดี ไอเทม หรือ NPC ที่เกิดจาก choice เฉพาะทาง เว้นแต่สิ่งนั้นอยู่ใน description หลักของ event ก่อนหน้า ไม่ใช่ resultText ของ choice
+        - event ที่ 2 เป็นต้นไปให้อ้างอิงแบบเป็นกลาง เช่น คนเดิม ร่องรอยเดิม สถานที่ต่อเนื่อง เสียงเดิม หรือเป้าหมายเดิมที่สมเหตุผลไม่ว่าผู้เล่นเลือก choice ไหน
         - ถ้ามี NPC ภัยคุกคาม หรือปริศนาสำคัญ ให้กลับมาอย่างน้อย 2 ครั้งใน chapter เพื่อให้รู้สึกเป็นเส้นเรื่องเดียวกัน
-        - resultText ของ choice ต้องทิ้งผลหรือเบาะแสที่ event ถัดไปใช้ต่อได้
+        - resultText ของ choice ต้องทิ้งผลหรือเบาะแสเฉพาะทางได้ แต่ห้ามบังคับให้ event ถัดไปต้องถือว่าผลนั้นเกิดขึ้นแล้ว เพราะเกมยังไม่รู้ choice ตอนสร้าง chapter
         - ห้ามรีเซ็ตสถานการณ์เหมือนไม่เคยเกิด event ก่อนหน้า และห้ามเริ่มทุก event ด้วยฉากใหม่ที่ไม่เกี่ยวกับเรื่องเดิม
         - ถ้า choice ระบุว่า "ใช้ไอเทม" ต้องใช้ไอเทมที่ผู้เล่นมีจริง หรือไอเทมที่อยู่ในฉากนั้นอย่างชัดเจน และต้องใช้ตรงหน้าที่ของไอเทม
         - ถ้าผู้เล่นมีไอเทมที่เหมาะกับสถานการณ์ ให้สร้างอย่างน้อย 1 choice ใน chapter ที่ใช้ไอเทมนั้นอย่างสมเหตุผล เช่น ไฟฉายในที่มืด, เชือกกับการปีน/ข้าม, แผนที่กับการเลือกเส้นทาง, ยากับแผล, มีดกับการตัด/ป้องกันตัว
@@ -417,6 +521,9 @@ public class LlmGameContentService
                   "thirstEffect": 0,
                   "fatigueEffect": 0,
                   "resultText": "string",
+                  "requiredItemId": "",
+                  "consumedItemId": "",
+                  "usedItemId": "",
                   "itemRewards": [
                     {
                       "id": "gen_item_id",
@@ -449,6 +556,67 @@ public class LlmGameContentService
           "startingItems": []
         }
         """;
+    }
+
+    private static string BuildGenerationScopeRule(
+        int eventCountToGenerate,
+        int fullEventsPerChapter,
+        int startEventNumber,
+        int endEventNumber,
+        ChapterGenerationMode mode)
+    {
+        var baseRule = $"- สร้าง event ให้ครบ {eventCountToGenerate} เหตุการณ์ โดย id ควรเรียงจาก evt_{startEventNumber:D2} ถึง evt_{endEventNumber:D2}";
+
+        return mode switch
+        {
+            ChapterGenerationMode.Opening =>
+                $"{baseRule}\n- นี่เป็นช่วงต้นของ chapter เดียวกันเท่านั้น เหตุการณ์สุดท้ายของชุดนี้ต้องทิ้งเป้าหมายหรือร่องรอยให้ไปต่อ ห้ามสรุป chapter และห้ามเปิดทางไป chapter ถัดไป",
+            ChapterGenerationMode.Continuation =>
+                $"{baseRule}\n- นี่เป็นการต่อจาก event ที่สร้างไว้แล้วใน chapter เดียวกัน ต้องใช้เป้าหมาย สถานที่ ร่องรอย หรือภัยคุกคามเดิมให้ต่อเนื่อง แต่ห้ามถือว่าผู้เล่นเลือก choice ใดใน events ก่อนหน้า เว้นแต่ปรากฏในความทรงจำเนื้อเรื่องล่าสุด",
+            _ =>
+                $"{baseRule}\n- เหตุการณ์ทั้งหมดคือ chapter เดียวกันเต็มชุด {fullEventsPerChapter} event"
+        };
+    }
+
+    private static string BuildEndingRule(
+        int chapterNumber,
+        int maxChapters,
+        int fullEventsPerChapter,
+        int endEventNumber,
+        ChapterGenerationMode mode)
+    {
+        if (mode == ChapterGenerationMode.Opening)
+            return "- ชุด event นี้เป็นช่วงต้นของ chapter ห้ามเขียนบทสรุป ห้ามจบเกม และห้ามเปิด chapter ถัดไป";
+
+        if (endEventNumber < fullEventsPerChapter)
+            return "- event สุดท้ายของชุดนี้ต้องยังอยู่ใน chapter เดิมและทิ้งเส้นเรื่องให้ต่อ ห้ามเปิด chapter ถัดไป";
+
+        return chapterNumber >= maxChapters
+            ? $"- chapter นี้เป็นบทสุดท้าย event ที่ {fullEventsPerChapter} ต้องเป็นเหตุการณ์ปลายทางที่นำไปสู่ฉากจบ"
+            : $"- event ที่ {fullEventsPerChapter} ต้องเปิดทางไป chapter ถัดไป แต่ยังไม่จบเกม";
+    }
+
+    private static string BuildRewardTargetRule(int eventCountToGenerate, ChapterGenerationMode mode)
+    {
+        if (mode == ChapterGenerationMode.Full)
+            return "- ใส่ itemRewards รวมทั้ง chapter อย่างน้อย 10 ชิ้น โดย itemRewards เป็น array ของ item object ครบถ้วน และ 1 choice ให้ได้ 1-3 ชิ้นได้ตามบริบท";
+
+        var target = Math.Max(3, eventCountToGenerate + 1);
+        return $"- ใส่ itemRewards ในชุด event นี้อย่างน้อย {target} ชิ้น โดย itemRewards เป็น array ของ item object ครบถ้วน และ 1 choice ให้ได้ 1-3 ชิ้นได้ตามบริบท";
+    }
+
+    private static string BuildExistingChapterEventsForPrompt(GameState? state, int startEventNumber)
+    {
+        if (state == null || startEventNumber <= 1 || state.GeneratedEvents.Count == 0)
+            return "ยังไม่มี event ใน chapter นี้ที่ต้องต่อ";
+
+        return string.Join("\n", state.GeneratedEvents
+            .Take(startEventNumber - 1)
+            .Select((gameEvent, index) =>
+            {
+                var choices = string.Join(" / ", gameEvent.Choices.Take(2).Select(choice => choice.Text));
+                return $"- event {index + 1}: {gameEvent.Title} | {gameEvent.Description} | choices: {choices}";
+            }));
     }
 
     private static string BuildStateSummary(GameState state)
@@ -610,12 +778,21 @@ public class LlmGameContentService
     private void NormalizeContent(
         GeneratedGameContent content,
         Survivor survivor,
-        int eventsPerChapter,
+        int chapterNumber,
+        int eventCountToGenerate,
         StoryAssetCatalog assetCatalog,
-        GameState? state = null)
+        GameState? state = null,
+        int startEventNumber = 1,
+        ChapterGenerationMode mode = ChapterGenerationMode.Full)
     {
         if (string.IsNullOrWhiteSpace(content.StoryTitle))
             content.StoryTitle = $"เส้นทางของ {survivor.Name}";
+
+        if (mode == ChapterGenerationMode.Continuation && state != null && !string.IsNullOrWhiteSpace(state.CurrentChapterTitle))
+            content.StoryTitle = state.CurrentChapterTitle;
+
+        if (mode == ChapterGenerationMode.Continuation && state != null && !string.IsNullOrWhiteSpace(state.CurrentChapterAlias))
+            content.ChapterAlias = state.CurrentChapterAlias;
 
         content.ChapterAlias = _storyAssetResolver.NormalizeAlias(
             content.ChapterAlias,
@@ -625,17 +802,17 @@ public class LlmGameContentService
 
         content.Events = content.Events
             .Where(e => !string.IsNullOrWhiteSpace(e.Title) && e.Choices.Count >= 2)
-            .Take(eventsPerChapter)
+            .Take(eventCountToGenerate)
             .ToList();
 
-        if (content.Events.Count < eventsPerChapter)
+        if (content.Events.Count < eventCountToGenerate)
             throw new InvalidOperationException("LLM returned too few playable events.");
 
         var rewardCount = 0;
         for (var i = 0; i < content.Events.Count; i++)
         {
             var gameEvent = content.Events[i];
-            gameEvent.Id = string.IsNullOrWhiteSpace(gameEvent.Id) ? $"evt_{i + 1:D2}" : gameEvent.Id;
+            gameEvent.Id = string.IsNullOrWhiteSpace(gameEvent.Id) ? $"evt_{startEventNumber + i:D2}" : gameEvent.Id;
             ThaiNarrativeTextNormalizer.Normalize(gameEvent);
             gameEvent.StoryAlias = _storyAssetResolver.NormalizeAlias(
                 gameEvent.StoryAlias ?? gameEvent.ImageAlias,
@@ -654,6 +831,9 @@ public class LlmGameContentService
             {
                 var choice = gameEvent.Choices[c];
                 choice.Id = string.IsNullOrWhiteSpace(choice.Id) ? $"c{c + 1}" : choice.Id;
+                choice.RequiredItemId = choice.RequiredItemId?.Trim() ?? string.Empty;
+                choice.ConsumedItemId = choice.ConsumedItemId?.Trim() ?? string.Empty;
+                choice.UsedItemId = choice.UsedItemId?.Trim() ?? string.Empty;
                 choice.HpEffect = ClampEffect(choice.HpEffect);
                 choice.HungerEffect = ClampEffect(choice.HungerEffect);
                 choice.ThirstEffect = ClampEffect(choice.ThirstEffect);
@@ -662,7 +842,6 @@ public class LlmGameContentService
                     ? "คุณรับผลจากการตัดสินใจนั้นและเดินหน้าต่อ"
                     : choice.ResultText;
                 NormalizeChoiceItemContext(choice);
-                EventChoiceInventoryGuard.Normalize(choice, GetAvailableChoiceItems(survivor, content, state));
                 choice.Text = ThaiNarrativeTextNormalizer.Normalize(choice.Text);
                 choice.ResultText = ThaiNarrativeTextNormalizer.Normalize(choice.ResultText);
 
@@ -707,15 +886,48 @@ public class LlmGameContentService
             }
         }
 
-        content.StartingItems = content.StartingItems.Take(3).ToList();
+        EnsureStartingItems(content, chapterNumber, mode != ChapterGenerationMode.Continuation);
         for (var i = 0; i < content.StartingItems.Count; i++)
         {
             NormalizeItem(content.StartingItems[i], $"start_{i + 1}", assetCatalog);
             ItemRewardConsistencyService.Normalize(content.StartingItems[i]);
         }
 
-        EnsureMinimumItemRewards(content, assetCatalog, rewardCount, Math.Min(14, Math.Max(10, eventsPerChapter * 2)));
-        EnsureBalancedResourceRewards(content, assetCatalog, eventsPerChapter, state);
+        EnsureMinimumItemRewards(content, assetCatalog, rewardCount, GetTargetRewardCount(eventCountToGenerate, mode));
+        EnsureBalancedResourceRewards(content, assetCatalog, eventCountToGenerate, state, mode);
+    }
+
+    private static int GetTargetRewardCount(int eventCountToGenerate, ChapterGenerationMode mode)
+    {
+        return mode == ChapterGenerationMode.Full
+            ? Math.Min(14, Math.Max(10, eventCountToGenerate * 2))
+            : Math.Min(10, Math.Max(3, eventCountToGenerate + 1));
+    }
+
+    private static void EnsureStartingItems(GeneratedGameContent content, int chapterNumber, bool allowStartingItems)
+    {
+        content.StartingItems ??= new List<Item>();
+
+        if (chapterNumber != 1 || !allowStartingItems)
+        {
+            content.StartingItems = new List<Item>();
+            return;
+        }
+
+        content.StartingItems = content.StartingItems
+            .Where(item => item != null)
+            .Take(3)
+            .ToList();
+
+        var fallbackNames = new[]
+        {
+            "น้ำกรองขวดเล็ก",
+            "อาหารกระป๋องบุบ",
+            "ผ้าพันแผลสะอาด"
+        };
+
+        for (var i = content.StartingItems.Count; i < 3; i++)
+            content.StartingItems.Add(CreateFallbackItem(fallbackNames[i], $"start_fallback_{i + 1}"));
     }
 
     private static float ClampEffect(float value) => Math.Clamp(value, -30f, 30f);
@@ -815,11 +1027,16 @@ public class LlmGameContentService
     private void EnsureBalancedResourceRewards(
         GeneratedGameContent content,
         StoryAssetCatalog assetCatalog,
-        int eventsPerChapter,
-        GameState? state)
+        int eventCountToGenerate,
+        GameState? state,
+        ChapterGenerationMode mode)
     {
-        var targetFood = Math.Max(3, eventsPerChapter);
-        var targetWater = GetWaterRewardTarget(eventsPerChapter, state);
+        var targetFood = mode == ChapterGenerationMode.Full
+            ? Math.Max(3, eventCountToGenerate)
+            : Math.Max(1, eventCountToGenerate / 2);
+        var targetWater = mode == ChapterGenerationMode.Full
+            ? GetWaterRewardTarget(eventCountToGenerate, state)
+            : GetPartialWaterRewardTarget(eventCountToGenerate, state);
 
         EnsureResourceReward(content, assetCatalog, "Food", targetFood, "อาหารกระป๋องบุบ");
         EnsureResourceReward(content, assetCatalog, "Water", targetWater, "น้ำกรองขวดเล็ก");
@@ -835,6 +1052,20 @@ public class LlmGameContentService
         {
             <= 25f => baseTarget + 4,
             <= 40f => baseTarget + 2,
+            _ => baseTarget
+        };
+    }
+
+    private static int GetPartialWaterRewardTarget(int eventCountToGenerate, GameState? state)
+    {
+        var baseTarget = Math.Max(2, eventCountToGenerate / 2 + 1);
+        if (state == null)
+            return baseTarget;
+
+        return state.Survivor.Thirst switch
+        {
+            <= 25f => baseTarget + 2,
+            <= 40f => baseTarget + 1,
             _ => baseTarget
         };
     }
@@ -995,7 +1226,9 @@ public class LlmGameContentService
         StoryAssetCatalog assetCatalog,
         string fallbackReason = "",
         GameState? state = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        int startEventNumber = 1,
+        ChapterGenerationMode mode = ChapterGenerationMode.Full)
     {
         var storyTreeContent = await TryCreateStoryTreeFallbackContentAsync(
             survivor,
@@ -1004,7 +1237,9 @@ public class LlmGameContentService
             assetCatalog,
             fallbackReason,
             state,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken,
+            startEventNumber,
+            mode).ConfigureAwait(false);
 
         if (storyTreeContent != null)
             return storyTreeContent;
@@ -1016,9 +1251,11 @@ public class LlmGameContentService
             assetCatalog,
             fallbackReason,
             state,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken,
+            startEventNumber,
+            mode).ConfigureAwait(false);
 
-        return eventsJsonContent ?? CreateRandomFallbackContent(survivor, chapterNumber, eventsPerChapter, assetCatalog, fallbackReason, state);
+        return eventsJsonContent ?? CreateRandomFallbackContent(survivor, chapterNumber, eventsPerChapter, assetCatalog, fallbackReason, state, startEventNumber, mode);
     }
 
     private async Task<GeneratedGameContent?> TryCreateStoryTreeFallbackContentAsync(
@@ -1028,7 +1265,9 @@ public class LlmGameContentService
         StoryAssetCatalog assetCatalog,
         string fallbackReason,
         GameState? state,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        int startEventNumber,
+        ChapterGenerationMode mode)
     {
         try
         {
@@ -1047,7 +1286,7 @@ public class LlmGameContentService
             if (allEvents.Count == 0)
                 return null;
 
-            var startIndex = Math.Max(0, (chapterNumber - 1) * eventsPerChapter);
+            var startIndex = Math.Max(0, (chapterNumber - 1) * eventsPerChapter + startEventNumber - 1);
             var events = allEvents
                 .Skip(startIndex)
                 .Take(eventsPerChapter)
@@ -1061,11 +1300,11 @@ public class LlmGameContentService
                 StoryTitle = $"บทที่ {chapterNumber}: เส้นทางจาก Story Tree",
                 UsedRemoteLlm = false,
                 Events = events,
-                StartingItems = chapterNumber == 1 ? CreateStoryTreeStartingItems() : new List<Item>(),
+                StartingItems = chapterNumber == 1 && mode != ChapterGenerationMode.Continuation ? CreateStoryTreeStartingItems() : new List<Item>(),
                 FallbackReason = $"{fallbackReason}\nใช้ story_tree.json แทน Typhoon API"
             };
 
-            NormalizeContent(content, survivor, eventsPerChapter, assetCatalog, state);
+            NormalizeContent(content, survivor, chapterNumber, eventsPerChapter, assetCatalog, state, startEventNumber, mode);
             content.UsedRemoteLlm = false;
             return content;
         }
@@ -1082,7 +1321,9 @@ public class LlmGameContentService
         StoryAssetCatalog assetCatalog,
         string fallbackReason,
         GameState? state,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        int startEventNumber,
+        ChapterGenerationMode mode)
     {
         try
         {
@@ -1091,17 +1332,20 @@ public class LlmGameContentService
             if (events is not { Count: > 0 })
                 return null;
 
-            var selectedEvents = events.Take(eventsPerChapter).ToList();
+            var selectedEvents = events
+                .Skip(Math.Max(0, startEventNumber - 1))
+                .Take(eventsPerChapter)
+                .ToList();
             var content = new GeneratedGameContent
             {
                 StoryTitle = $"บทที่ {chapterNumber}: เส้นทางจาก Events JSON",
                 UsedRemoteLlm = false,
                 Events = selectedEvents,
-                StartingItems = chapterNumber == 1 ? CreateStoryTreeStartingItems() : new List<Item>(),
+                StartingItems = chapterNumber == 1 && mode != ChapterGenerationMode.Continuation ? CreateStoryTreeStartingItems() : new List<Item>(),
                 FallbackReason = $"{fallbackReason}\nใช้ events.json แทน Typhoon API"
             };
 
-            NormalizeContent(content, survivor, eventsPerChapter, assetCatalog, state);
+            NormalizeContent(content, survivor, chapterNumber, eventsPerChapter, assetCatalog, state, startEventNumber, mode);
             content.UsedRemoteLlm = false;
             return content;
         }
@@ -1199,7 +1443,9 @@ public class LlmGameContentService
         int eventsPerChapter,
         StoryAssetCatalog assetCatalog,
         string fallbackReason = "",
-        GameState? state = null)
+        GameState? state = null,
+        int startEventNumber = 1,
+        ChapterGenerationMode mode = ChapterGenerationMode.Full)
     {
         var seed = Guid.NewGuid().ToString("N")[..8];
         var arcTitle = chapterNumber switch
@@ -1242,18 +1488,21 @@ public class LlmGameContentService
         var events = new List<GameEvent>();
         for (var i = 0; i < eventsPerChapter; i++)
         {
-            var place = route[i % route.Length];
+            var eventNumber = startEventNumber + i;
+            var place = route[(eventNumber - 1) % route.Length];
             var isFinalBeat = i == eventsPerChapter - 1;
-            var thread = i == 0
+            var thread = eventNumber == 1
                 ? openingThread
                 : $"เบาะแสจากจุดก่อนพา {survivor.Name} มาถึง{place} และ{recurringThreat}ยังตามมาเหมือนเดิม";
             var nextLead = isFinalBeat
-                ? "ทางเลือกนี้จะกำหนดว่าบทต่อไปเริ่มจากความหวังหรือหนี้ที่ต้องชดใช้"
-                : $"ร่องรอยใหม่ชี้ไปยัง{route[(i + 1) % route.Length]}";
+                ? (mode == ChapterGenerationMode.Opening
+                    ? "ร่องรอยยังไม่จบและบีบให้คุณต้องตามสัญญาณต่อในจุดถัดไป"
+                    : "ทางเลือกนี้จะกำหนดว่าบทต่อไปเริ่มจากความหวังหรือหนี้ที่ต้องชดใช้")
+                : $"ร่องรอยใหม่ชี้ไปยัง{route[eventNumber % route.Length]}";
 
             events.Add(new GameEvent
             {
-                Id = $"fallback_ch{chapterNumber}_{seed}_{i + 1:D2}",
+                Id = $"fallback_ch{chapterNumber}_{seed}_{eventNumber:D2}",
                 Title = $"{arcTitle}: {place}",
                 Description = $"{thread}. ที่นี่มีร่องรอยของคนรอดชีวิตปะปนกับกับดักหยาบๆ ทุกอย่างบอกว่าใครบางคนอยากให้คุณเดินต่อ แต่ไม่อยากให้ไปถึงง่ายๆ",
                 Choices = new List<EventChoice>
@@ -1290,7 +1539,7 @@ public class LlmGameContentService
             StoryTitle = $"บทที่ {chapterNumber}: {arcTitle}",
             UsedRemoteLlm = false,
             Events = events,
-            StartingItems = chapterNumber == 1 ? new List<Item>
+                StartingItems = chapterNumber == 1 && mode != ChapterGenerationMode.Continuation ? new List<Item>
             {
                 CreateFallbackItem("น้ำกรองขวดเล็ก", $"start_{seed}_water"),
                 CreateFallbackItem("อาหารกระป๋องบุบ", $"start_{seed}_food"),
@@ -1298,21 +1547,10 @@ public class LlmGameContentService
             } : new List<Item>()
         };
 
-        NormalizeContent(content, survivor, eventsPerChapter, assetCatalog, state);
+        NormalizeContent(content, survivor, chapterNumber, eventsPerChapter, assetCatalog, state, startEventNumber, mode);
         content.UsedRemoteLlm = false;
         content.FallbackReason = fallbackReason;
         return content;
-    }
-
-    private static IReadOnlyCollection<Item> GetAvailableChoiceItems(
-        Survivor survivor,
-        GeneratedGameContent content,
-        GameState? state)
-    {
-        var items = new List<Item>();
-        items.AddRange(state?.Survivor.Inventory.GetItems() ?? survivor.Inventory.GetItems());
-        items.AddRange(content.StartingItems);
-        return items;
     }
 
     private static Item CreateFallbackItem(string nameTh, string id)
@@ -1378,23 +1616,39 @@ public class LlmGameContentService
 
     private static async Task<LlmRuntimeSettings> LoadSettingsAsync(CancellationToken cancellationToken)
     {
-        var envFileSettings = await LoadEnvFileSettingsAsync(cancellationToken).ConfigureAwait(false);
-        var packagedSettings = await LoadPackagedSettingsAsync(cancellationToken).ConfigureAwait(false);
-        var provider = NormalizeProvider(GetSetting(new[] { "LLM_PROVIDER" }, envFileSettings, packagedSettings));
+        if (_cachedSettings != null)
+            return _cachedSettings;
 
-        return new LlmRuntimeSettings
+        await SettingsLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
         {
-            Provider = provider,
-            ApiKey = provider == ProviderOpenAi
-                ? GetSetting(new[] { "OPENAI_API_KEY", "LLM_API_KEY" }, envFileSettings, packagedSettings)
-                : GetSetting(new[] { "TYPHOON_API_KEY", "LLM_API_KEY" }, envFileSettings, packagedSettings),
-            Endpoint = provider == ProviderOpenAi
-                ? GetSetting(new[] { "OPENAI_ENDPOINT", "LLM_ENDPOINT" }, envFileSettings, packagedSettings) ?? OpenAiEndpoint
-                : GetSetting(new[] { "TYPHOON_ENDPOINT", "LLM_ENDPOINT" }, envFileSettings, packagedSettings) ?? TyphoonEndpoint,
-            Model = provider == ProviderOpenAi
-                ? GetSetting(new[] { "OPENAI_MODEL", "LLM_MODEL" }, envFileSettings, packagedSettings) ?? OpenAiModel
-                : GetSetting(new[] { "TYPHOON_MODEL", "LLM_MODEL" }, envFileSettings, packagedSettings) ?? TyphoonModel
-        };
+            if (_cachedSettings != null)
+                return _cachedSettings;
+
+            var envFileSettings = await LoadEnvFileSettingsAsync(cancellationToken).ConfigureAwait(false);
+            var packagedSettings = await LoadPackagedSettingsAsync(cancellationToken).ConfigureAwait(false);
+            var provider = NormalizeProvider(GetSetting(new[] { "LLM_PROVIDER" }, envFileSettings, packagedSettings));
+
+            _cachedSettings = new LlmRuntimeSettings
+            {
+                Provider = provider,
+                ApiKey = provider == ProviderOpenAi
+                    ? GetSetting(new[] { "OPENAI_API_KEY", "LLM_API_KEY" }, envFileSettings, packagedSettings)
+                    : GetSetting(new[] { "TYPHOON_API_KEY", "LLM_API_KEY" }, envFileSettings, packagedSettings),
+                Endpoint = provider == ProviderOpenAi
+                    ? GetSetting(new[] { "OPENAI_ENDPOINT", "LLM_ENDPOINT" }, envFileSettings, packagedSettings) ?? OpenAiEndpoint
+                    : GetSetting(new[] { "TYPHOON_ENDPOINT", "LLM_ENDPOINT" }, envFileSettings, packagedSettings) ?? TyphoonEndpoint,
+                Model = provider == ProviderOpenAi
+                    ? GetSetting(new[] { "OPENAI_MODEL", "LLM_MODEL" }, envFileSettings, packagedSettings) ?? OpenAiModel
+                    : GetSetting(new[] { "TYPHOON_MODEL", "LLM_MODEL" }, envFileSettings, packagedSettings) ?? TyphoonModel
+            };
+
+            return _cachedSettings;
+        }
+        finally
+        {
+            SettingsLock.Release();
+        }
     }
 
     private static string NormalizeProvider(string? provider)

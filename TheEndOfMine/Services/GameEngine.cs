@@ -1,4 +1,5 @@
 using System.Timers;
+using TheEndOfMine.Data;
 using TheEndOfMine.Models;
 
 namespace TheEndOfMine.Services;
@@ -127,7 +128,9 @@ public class GameEngine
         var gameEvent = await _eventService.GetNextEventAsync(CurrentState.EventIndex, CurrentState.GeneratedEvents);
         if (gameEvent == null && CurrentState.GeneratedEvents.Count > 0)
         {
-            gameEvent = await AdvanceChapterAsync();
+            gameEvent = CurrentState.GeneratedEvents.Count < CurrentState.EventsPerChapter
+                ? await CompleteCurrentChapterAsync()
+                : await AdvanceChapterAsync();
         }
 
         if (gameEvent != null)
@@ -141,6 +144,52 @@ public class GameEngine
         }
 
         NotifyStateChanged();
+    }
+
+    private async Task<GameEvent?> CompleteCurrentChapterAsync()
+    {
+        if (CurrentState == null)
+            return null;
+
+        await TryMergeSavedCurrentChapterAsync();
+
+        var gameEvent = await _eventService.GetNextEventAsync(CurrentState.EventIndex, CurrentState.GeneratedEvents);
+        if (gameEvent != null || CurrentState.GeneratedEvents.Count >= CurrentState.EventsPerChapter)
+            return gameEvent;
+
+        var continuation = await _llmContentService.GenerateCurrentChapterContinuationAsync(CurrentState);
+        GeneratedEventMergeService.AppendEvents(CurrentState, continuation.Events);
+        CurrentState.StorySource = continuation.UsedRemoteLlm ? "llm" : "local_fallback";
+        _saveService.SaveCheckpoint(CurrentState);
+
+        return await _eventService.GetNextEventAsync(CurrentState.EventIndex, CurrentState.GeneratedEvents);
+    }
+
+    private async Task TryMergeSavedCurrentChapterAsync()
+    {
+        if (CurrentState == null)
+            return;
+
+        try
+        {
+            var (_, savedState, _) = await new GameDatabase().LoadAsync();
+            if (savedState == null ||
+                savedState.CurrentChapter != CurrentState.CurrentChapter ||
+                savedState.GeneratedEvents.Count <= CurrentState.GeneratedEvents.Count)
+            {
+                return;
+            }
+
+            CurrentState.GeneratedEvents = savedState.GeneratedEvents;
+            CurrentState.CurrentChapterTitle = savedState.CurrentChapterTitle;
+            CurrentState.CurrentChapterAlias = savedState.CurrentChapterAlias;
+            CurrentState.CurrentChapterImagePath = savedState.CurrentChapterImagePath;
+            CurrentState.StorySource = savedState.StorySource;
+        }
+        catch
+        {
+            // If background save is unavailable, the engine will generate the missing events itself.
+        }
     }
 
     private async Task<GameEvent?> AdvanceChapterAsync()
@@ -619,20 +668,71 @@ public class GameEngine
         if (CurrentState == null) return;
 
         CurrentState.IsStoryEnding = true;
-        CurrentState.GameOverTitle = "รอดไปถึงปลายทาง";
         CurrentState.DeathCause = string.Empty;
         CurrentState.EndingImagePath = BuildEndingImagePath();
 
-        var survivorName = string.IsNullOrWhiteSpace(CurrentState.Survivor.Name)
-            ? "คุณ"
-            : CurrentState.Survivor.Name;
-        var lastMemory = CurrentState.StoryMemory.LastOrDefault()?.Summary;
-        var context = string.IsNullOrWhiteSpace(lastMemory)
-            ? "หลังจากผ่านเมืองที่พังทลายและความเสี่ยงตลอดทาง"
-            : $"จากผลของเหตุการณ์ล่าสุด: {lastMemory}";
+        var finalMemory = CurrentState.StoryMemory?.LastOrDefault();
+        CurrentState.GameOverTitle = BuildStoryEndingTitle(finalMemory);
+        CurrentState.GameOverDetail = BuildStoryEndingDetail(CurrentState, finalMemory);
+    }
 
-        CurrentState.GameOverDetail =
-            $"{context} {survivorName} ไปถึงสัญญาณช่วยเหลือก่อนเมืองจะปิดตาย เฮลิคอปเตอร์ยกตัวขึ้นเหนือซากตึก ทิ้งเสียงฝูงซอมบี้และถนนมืดไว้เบื้องล่าง การเอาชีวิตรอดครั้งนี้ไม่ได้ลบทุกอย่างที่เสียไป แต่มันพิสูจน์ว่าคุณยังพาตัวเองไปถึงวันพรุ่งนี้ได้";
+    private static string BuildStoryEndingTitle(StoryMemoryEntry? finalMemory)
+    {
+        if (finalMemory == null)
+            return "บทสรุปของการเอาตัวรอด";
+
+        var text = $"{finalMemory.ChoiceText} {finalMemory.ResultText}".ToLowerInvariant();
+        if (ContainsAny(text, "ช่วย", "พา", "แบ่ง", "เสียสละ", "rescue", "save"))
+            return "รอดพร้อมสิ่งที่เลือกแบกไว้";
+
+        if (ContainsAny(text, "หนี", "ออก", "จุดอพยพ", "สัญญาณ", "safe zone", "escape", "signal"))
+            return "ถึงปลายทางจากทางเลือกสุดท้าย";
+
+        return "ผลลัพธ์ของทางเลือกสุดท้าย";
+    }
+
+    private static string BuildStoryEndingDetail(GameState state, StoryMemoryEntry? finalMemory)
+    {
+        var survivorName = string.IsNullOrWhiteSpace(state.Survivor.Name)
+            ? "คุณ"
+            : state.Survivor.Name;
+        var condition = BuildSurvivalConditionSummary(state);
+
+        if (finalMemory == null)
+            return $"{survivorName} ผ่านเหตุการณ์สุดท้ายของบทนี้มาได้ {condition} การเอาชีวิตรอดครั้งนี้จบลงจากสภาพและทางเลือกที่สะสมมาตลอดทาง";
+
+        var finalChoice = string.IsNullOrWhiteSpace(finalMemory.ChoiceText)
+            ? "ตัดสินใจเดินหน้าต่อ"
+            : finalMemory.ChoiceText;
+        var finalResult = string.IsNullOrWhiteSpace(finalMemory.ResultText)
+            ? finalMemory.Summary
+            : finalMemory.ResultText;
+
+        return $"{survivorName} ไปถึงบทสรุปจากการเลือก \"{finalChoice}\" {finalResult} {condition} ตอนจบนี้จึงเป็นผลของทางเลือกสุดท้ายและบาดแผลที่สะสมมาตลอดการเดินทาง";
+    }
+
+    private static string BuildSurvivalConditionSummary(GameState state)
+    {
+        var s = state.Survivor;
+        var pressures = new List<string>();
+
+        if (s.HP < 35)
+            pressures.Add("บาดเจ็บหนัก");
+        if (s.Hunger < 25)
+            pressures.Add("แทบไม่มีแรงจากความหิว");
+        if (s.Thirst < 25)
+            pressures.Add("ขาดน้ำจนร่างกายสั่น");
+        if (s.Fatigue > 75)
+            pressures.Add("เหนื่อยล้าจนแทบยืนไม่ไหว");
+        if (state.Infection >= InfectionWarningThreshold)
+            pressures.Add("ยังมีอาการติดเชื้อคุกคาม");
+        if (state.Noise >= NoisyEventThreshold)
+            pressures.Add("เสียงที่สะสมไว้ยังดึงอันตรายเข้าใกล้");
+
+        if (pressures.Count == 0)
+            return "คุณยังเหลือแรงพอจะจำได้ว่ารอดมาได้ด้วยอะไร";
+
+        return $"คุณรอดมาได้ทั้งที่{string.Join(" และ", pressures)}";
     }
 
     private void ApplyDeathEnding(string? causeOverride)

@@ -35,6 +35,9 @@ public static class EventChoiceInventoryGuard
 
     public static void Normalize(EventChoice choice, IReadOnlyCollection<Item> availableItems)
     {
+        if (!NormalizeExplicitItemIds(choice, availableItems))
+            return;
+
         foreach (var rule in ToolUseRules)
         {
             if (!MentionsAny(choice.Text, rule.Aliases) && !MentionsAny(choice.ResultText, rule.Aliases))
@@ -43,15 +46,83 @@ public static class EventChoiceInventoryGuard
             if (!LooksLikeToolUse(choice.Text) && !LooksLikeToolUse(choice.ResultText))
                 continue;
 
-            if (HasMatchingItem(availableItems, rule))
+            var matchingItem = FindMatchingItem(availableItems, rule.Aliases);
+            if (matchingItem != null)
+            {
+                MarkItemUse(choice, matchingItem);
                 continue;
+            }
 
             choice.Text = RewriteUnavailableToolText(choice.Text, rule);
             choice.ResultText = RewriteUnavailableToolResult(choice.ResultText, rule);
             choice.InventoryEffectNote = $"ไม่มี{rule.DisplayName}: ผลลัพธ์ถูกปรับให้เสี่ยงน้อยลงแต่ไม่ได้ใช้ไอเทม";
+            ClearExplicitItemIds(choice);
         }
 
         ApplyItemAdvantages(choice, availableItems);
+    }
+
+    private static bool NormalizeExplicitItemIds(EventChoice choice, IReadOnlyCollection<Item> availableItems)
+    {
+        var required = NormalizeExplicitItemId(choice.RequiredItemId, availableItems);
+        if (!string.IsNullOrWhiteSpace(choice.RequiredItemId) && required == null)
+        {
+            RewriteUnavailableExplicitItem(choice, choice.RequiredItemId);
+            return false;
+        }
+
+        var consumed = NormalizeExplicitItemId(choice.ConsumedItemId, availableItems);
+        if (!string.IsNullOrWhiteSpace(choice.ConsumedItemId) && consumed == null)
+        {
+            RewriteUnavailableExplicitItem(choice, choice.ConsumedItemId);
+            return false;
+        }
+
+        var used = NormalizeExplicitItemId(choice.UsedItemId, availableItems);
+        if (!string.IsNullOrWhiteSpace(choice.UsedItemId) && used == null)
+        {
+            RewriteUnavailableExplicitItem(choice, choice.UsedItemId);
+            return false;
+        }
+
+        if (required != null)
+            choice.RequiredItemId = required.Id;
+
+        if (consumed != null)
+        {
+            choice.ConsumedItemId = consumed.Id;
+            if (string.IsNullOrWhiteSpace(choice.RequiredItemId))
+                choice.RequiredItemId = consumed.Id;
+        }
+
+        if (used != null)
+        {
+            choice.UsedItemId = used.Id;
+            if (string.IsNullOrWhiteSpace(choice.RequiredItemId))
+                choice.RequiredItemId = used.Id;
+        }
+
+        return true;
+    }
+
+    private static Item? NormalizeExplicitItemId(string itemId, IReadOnlyCollection<Item> availableItems)
+    {
+        if (string.IsNullOrWhiteSpace(itemId))
+            return null;
+
+        return availableItems.FirstOrDefault(item => MatchesItemReference(item, itemId));
+    }
+
+    private static void RewriteUnavailableExplicitItem(EventChoice choice, string itemId)
+    {
+        var displayName = string.IsNullOrWhiteSpace(itemId) ? "ไอเทมที่ระบุ" : itemId.Trim();
+        choice.Text = $"เปลี่ยนแผนโดยไม่ใช้{displayName}";
+        choice.ResultText = $"คุณไม่มี{displayName}ติดตัว จึงไม่ฝืนใช้ของที่ไม่มีและเลือกวิธีที่ปลอดภัยกว่า";
+        choice.InventoryEffectNote = $"ไม่มี{displayName}: ระบบปรับตัวเลือกไม่ให้ใช้ไอเทมที่ไม่มี";
+        choice.HpEffect = Math.Min(choice.HpEffect, 0f);
+        choice.HungerEffect = Math.Min(choice.HungerEffect, 0f);
+        choice.ThirstEffect = Math.Min(choice.ThirstEffect, 0f);
+        ClearExplicitItemIds(choice);
     }
 
     private static void ApplyItemAdvantages(EventChoice choice, IReadOnlyCollection<Item> availableItems)
@@ -61,7 +132,7 @@ public static class EventChoiceInventoryGuard
 
         var text = $"{choice.Text} {choice.ResultText}";
         var best = ItemAdvantageRules
-            .Where(rule => MentionsAny(text, rule.Triggers) || MentionsAny(text, rule.ItemAliases))
+            .Where(rule => MentionsAny(text, rule.Triggers) || MentionsAny(choice.Text, rule.ItemAliases))
             .Select(rule => new { Rule = rule, Item = FindMatchingItem(availableItems, rule.ItemAliases) })
             .FirstOrDefault(match => match.Item != null);
 
@@ -75,6 +146,7 @@ public static class EventChoiceInventoryGuard
 
         var itemName = GetItemName(best.Item!);
         choice.InventoryEffectNote = $"ใช้ประโยชน์จาก {itemName}: ลดผลเสียของตัวเลือกนี้";
+        MarkItemUse(choice, best.Item!);
 
         if (!choice.Text.Contains(itemName, StringComparison.OrdinalIgnoreCase))
             choice.Text = $"{choice.Text} ({itemName})";
@@ -87,6 +159,62 @@ public static class EventChoiceInventoryGuard
             var haystack = $"{item.Id} {item.NameTh} {item.NameEn} {item.Category} {item.Subcategory} {item.StoryAlias}";
             return aliases.Any(alias => haystack.Contains(alias, StringComparison.OrdinalIgnoreCase));
         });
+    }
+
+    private static void MarkItemUse(EventChoice choice, Item item)
+    {
+        if (string.IsNullOrWhiteSpace(item.Id))
+            return;
+
+        if (string.IsNullOrWhiteSpace(choice.RequiredItemId))
+            choice.RequiredItemId = item.Id;
+
+        if (IsConsumableItem(item))
+        {
+            if (string.IsNullOrWhiteSpace(choice.ConsumedItemId))
+                choice.ConsumedItemId = item.Id;
+            return;
+        }
+
+        if (IsDurableInventoryItem(item) && string.IsNullOrWhiteSpace(choice.UsedItemId))
+            choice.UsedItemId = item.Id;
+    }
+
+    private static bool IsConsumableItem(Item item)
+    {
+        return item.IsUsable || item.Effects?.OneTimeUse == true;
+    }
+
+    private static bool IsDurableInventoryItem(Item item)
+    {
+        var category = item.Category.ToLowerInvariant();
+        var effects = item.Effects;
+        return category is "tool" or "weapon" ||
+               effects?.IsGeneralTool == true ||
+               effects?.IsLightSource == true ||
+               effects?.IsRope == true ||
+               effects?.IsSurvivalTool == true ||
+               effects?.DmgMin > 0 ||
+               effects?.DmgMax > 0;
+    }
+
+    private static bool MatchesItemReference(Item item, string itemId)
+    {
+        return MatchesItemReferenceValue(itemId, item.Id) ||
+               MatchesItemReferenceValue(itemId, item.StoryAlias) ||
+               MatchesItemReferenceValue(itemId, item.NameTh) ||
+               MatchesItemReferenceValue(itemId, item.NameEn);
+    }
+
+    private static bool MatchesItemReferenceValue(string itemId, string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return false;
+
+        var token = itemId.Trim();
+        var candidate = value.Trim();
+        return string.Equals(token, candidate, StringComparison.OrdinalIgnoreCase) ||
+               candidate.Contains(token, StringComparison.OrdinalIgnoreCase);
     }
 
     private static float ImproveNegative(float value, float protection)
@@ -116,15 +244,6 @@ public static class EventChoiceInventoryGuard
             return false;
 
         return aliases.Any(alias => text.Contains(alias, StringComparison.OrdinalIgnoreCase));
-    }
-
-    private static bool HasMatchingItem(IReadOnlyCollection<Item> items, ToolUseRule rule)
-    {
-        return items.Any(item =>
-        {
-            var haystack = $"{item.Id} {item.NameTh} {item.NameEn} {item.Category} {item.Subcategory} {item.StoryAlias}";
-            return rule.Aliases.Any(alias => haystack.Contains(alias, StringComparison.OrdinalIgnoreCase));
-        });
     }
 
     private static string RewriteUnavailableToolText(string text, ToolUseRule rule)
@@ -165,6 +284,13 @@ public static class EventChoiceInventoryGuard
                 text.Contains("ทุบ", StringComparison.OrdinalIgnoreCase) ||
                 text.Contains("พัง", StringComparison.OrdinalIgnoreCase) ||
                 text.Contains("ส่อง", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static void ClearExplicitItemIds(EventChoice choice)
+    {
+        choice.RequiredItemId = string.Empty;
+        choice.ConsumedItemId = string.Empty;
+        choice.UsedItemId = string.Empty;
     }
 
     private sealed record ToolUseRule(string DisplayName, IReadOnlyCollection<string> Aliases, string FallbackChoiceText);

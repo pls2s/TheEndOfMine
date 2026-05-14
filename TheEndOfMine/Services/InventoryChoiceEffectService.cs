@@ -8,34 +8,27 @@ public static class InventoryChoiceEffectService
     {
         var inventory = state.Survivor.Inventory;
 
+        var consumedItem = ConsumeExplicitItem(inventory, choice);
+        WearExplicitDurableItem(inventory, choice, consumedItem);
+
         foreach (var item in choice.GetItemRewards())
             inventory.AddItem(item, expandIfFull: true);
-
-        ConsumeMentionedUsableItem(inventory, choice);
-        WearMentionedDurableItem(inventory, choice);
     }
 
-    private static void ConsumeMentionedUsableItem(Inventory inventory, EventChoice choice)
+    private static Item? ConsumeExplicitItem(Inventory inventory, EventChoice choice)
     {
-        var text = BuildChoiceText(choice);
-        if (!MentionsUseAction(text))
-            return;
-
-        var item = inventory.GetItems().FirstOrDefault(item => item.IsUsable && MentionsItem(text, item));
+        var item = FindInventoryItem(inventory, choice.ConsumedItemId);
         if (item == null)
-            return;
+            return null;
 
         inventory.RemoveItem(item);
+        return item;
     }
 
-    private static void WearMentionedDurableItem(Inventory inventory, EventChoice choice)
+    private static void WearExplicitDurableItem(Inventory inventory, EventChoice choice, Item? consumedItem)
     {
-        var text = BuildChoiceText(choice);
-        if (!MentionsUseAction(text))
-            return;
-
-        var item = inventory.GetItems().FirstOrDefault(item => IsDurableTool(item) && MentionsItem(text, item));
-        if (item?.Durability == null)
+        var item = FindInventoryItem(inventory, choice.UsedItemId);
+        if (item == null || ReferenceEquals(item, consumedItem) || item.Durability == null || !IsDurableTool(item))
             return;
 
         item.Durability = Math.Max(0, item.Durability.Value - 1);
@@ -43,13 +36,24 @@ public static class InventoryChoiceEffectService
             inventory.RemoveItem(item);
     }
 
-    private static bool MentionsUseAction(string text)
+    private static Item? FindInventoryItem(Inventory inventory, string itemId)
     {
-        return ContainsAny(
-            text,
-            "ใช้", "กิน", "ดื่ม", "รักษา", "ทำแผล", "พันแผล", "ปฐมพยาบาล",
-            "เปิด", "งัด", "แงะ", "ตัด", "ฟัน", "ทุบ", "ส่อง", "ปีน", "ผูก", "ดึง",
-            "use", "eat", "drink", "treat", "bandage", "open", "cut", "climb", "tie", "pull");
+        if (string.IsNullOrWhiteSpace(itemId))
+            return null;
+
+        var token = itemId.Trim();
+        var items = inventory.GetItems().ToList();
+
+        return items.FirstOrDefault(item =>
+                   MatchesItemToken(token, item.Id) ||
+                   MatchesItemToken(token, item.StoryAlias) ||
+                   MatchesItemToken(token, item.NameTh) ||
+                   MatchesItemToken(token, item.NameEn))
+               ?? items.FirstOrDefault(item =>
+                   ContainsItemToken(token, item.Id) ||
+                   ContainsItemToken(token, item.StoryAlias) ||
+                   ContainsItemToken(token, item.NameTh) ||
+                   ContainsItemToken(token, item.NameEn));
     }
 
     private static bool IsDurableTool(Item item)
@@ -65,27 +69,15 @@ public static class InventoryChoiceEffectService
                effects?.DmgMax > 0;
     }
 
-    private static bool MentionsItem(string text, Item item)
+    private static bool MatchesItemToken(string token, string? itemValue)
     {
-        return MentionsToken(text, item.NameTh) ||
-               MentionsToken(text, item.NameEn) ||
-               MentionsToken(text, item.Id) ||
-               MentionsToken(text, item.StoryAlias);
+        return !string.IsNullOrWhiteSpace(itemValue) &&
+               string.Equals(token, itemValue.Trim(), StringComparison.OrdinalIgnoreCase);
     }
 
-    private static bool MentionsToken(string text, string? token)
+    private static bool ContainsItemToken(string token, string? itemValue)
     {
-        return !string.IsNullOrWhiteSpace(token) &&
-               text.Contains(token, StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static string BuildChoiceText(EventChoice choice)
-    {
-        return $"{choice.Text} {choice.ResultText}";
-    }
-
-    private static bool ContainsAny(string text, params string[] tokens)
-    {
-        return tokens.Any(token => text.Contains(token, StringComparison.OrdinalIgnoreCase));
+        return !string.IsNullOrWhiteSpace(itemValue) &&
+               itemValue.Contains(token, StringComparison.OrdinalIgnoreCase);
     }
 }

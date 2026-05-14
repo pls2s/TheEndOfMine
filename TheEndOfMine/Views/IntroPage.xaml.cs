@@ -1,6 +1,7 @@
 ﻿using Microsoft.Maui.Controls;
 using System;
 using System.Threading.Tasks;
+using TheEndOfMine.Data;
 using TheEndOfMine.Models;
 using TheEndOfMine.Services;
 
@@ -117,7 +118,7 @@ public partial class IntroPage : ContentPage
 
             await SetStartLoadingProgressAsync(0.18, "กำลังสร้าง Chapter 1 และเหตุการณ์เริ่มต้น");
             StartStartLoadingPulse();
-            var generatedContent = await contentGenerator.GenerateNewGameAsync(survivor);
+            var generatedContent = await contentGenerator.GenerateNewGameOpeningAsync(survivor);
             StopStartLoadingPulse();
             await SetStartLoadingProgressAsync(
                 0.68,
@@ -155,8 +156,9 @@ public partial class IntroPage : ContentPage
             await SetStartLoadingProgressAsync(0.9, "กำลังบันทึกเกม");
             new SaveService().DeleteAllSaves();
             Preferences.Remove("main_tutorial_seen");
-            var db = new TheEndOfMine.Data.GameDatabase();
+            var db = new GameDatabase();
             await db.SaveAsync(survivor, state, inv);
+            QueueInitialChapterCompletion(state);
 
             if (!generatedContent.UsedRemoteLlm)
             {
@@ -189,6 +191,43 @@ public partial class IntroPage : ContentPage
             _isStarting = false;
             if (startButton != null) startButton.IsEnabled = true;
         }
+    }
+
+    private static void QueueInitialChapterCompletion(GameState state)
+    {
+        if (state.GeneratedEvents.Count >= state.EventsPerChapter)
+            return;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var generator = new LlmGameContentService();
+                var continuation = await generator.GenerateCurrentChapterContinuationAsync(state);
+                if (continuation.Events.Count == 0)
+                    return;
+
+                var db = new GameDatabase();
+                var (_, latestState, latestInventory) = await db.LoadAsync();
+                if (latestState == null ||
+                    latestState.CurrentChapter != state.CurrentChapter ||
+                    latestState.GeneratedEvents.Count >= latestState.EventsPerChapter)
+                {
+                    return;
+                }
+
+                var added = GeneratedEventMergeService.AppendEvents(latestState, continuation.Events);
+                if (added == 0)
+                    return;
+
+                latestState.StorySource = continuation.UsedRemoteLlm ? "llm" : "local_fallback";
+                await db.SaveAsync(latestState.Survivor, latestState, latestInventory ?? latestState.Survivor.Inventory);
+            }
+            catch
+            {
+                // If background generation fails, GameEngine will finish the chapter on demand.
+            }
+        });
     }
 
     private async Task ShowStartLoadingAsync(string imageSource)

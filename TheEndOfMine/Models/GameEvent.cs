@@ -32,6 +32,15 @@ public class EventChoice
     [JsonPropertyName("items_add")]
     public List<string> ItemsAdd { get; set; } = new();
 
+    [JsonPropertyName("requiredItemId")]
+    public string RequiredItemId { get; set; } = string.Empty;
+
+    [JsonPropertyName("consumedItemId")]
+    public string ConsumedItemId { get; set; } = string.Empty;
+
+    [JsonPropertyName("usedItemId")]
+    public string UsedItemId { get; set; } = string.Empty;
+
     [JsonIgnore]
     public string InventoryEffectNote { get; set; } = string.Empty;
 

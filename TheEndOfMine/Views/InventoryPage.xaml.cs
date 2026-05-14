@@ -110,14 +110,14 @@ public partial class InventoryPage : ContentPage
 
     private async void OnUseItemClicked(object sender, EventArgs e)
     {
-        AudioFeedbackService.PlayButtonTap();
-
         if (_state == null || _selectedSlot?.Item == null)
             return;
 
         var item = _selectedSlot.Item;
         if (!item.IsUsable)
             return;
+
+        AudioFeedbackService.PlayItemUse(item);
 
         ApplyItemEffects(_state, item);
         ConsumeOrWearItem(item);
