@@ -8,8 +8,7 @@
 
     <Grid>
         <Image x:Name="SplashImage"
-               Source="splash_screen.gif"
-               IsAnimationPlaying="True"
+               Source="splash_page.png"
                Aspect="AspectFill"
                HorizontalOptions="Fill"
                VerticalOptions="Fill" />

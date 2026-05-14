@@ -16,17 +16,21 @@ public class Inventory
 
     public bool IsFull => Slots.All(s => s != null);
 
-    public bool AddItem(Item item)
+    public bool AddItem(Item item, bool expandIfFull = false)
     {
         EnsureCapacityMatchesSlots();
 
-        if (IsFull && GetCarryCapacityBonusSlots(item) > 0)
-            ExpandRowsForCapacityBonus(GetCarryCapacityBonusSlots(item));
+        var carryBonusSlots = GetCarryCapacityBonusSlots(item);
+        if (IsFull && carryBonusSlots > 0)
+            ExpandRowsForCapacityBonus(carryBonusSlots);
+        else if (IsFull && expandIfFull)
+            ExpandRow();
 
         int index = Slots.IndexOf(null);
         if (index == -1) return false;
         Slots[index] = item;
-        ExpandRowsForCapacityBonus(GetCarryCapacityBonusSlots(item));
+        if (carryBonusSlots > 0)
+            ExpandRowsForCapacityBonus(carryBonusSlots);
         return true;
     }
 

@@ -8,8 +8,8 @@ public static class InventoryChoiceEffectService
     {
         var inventory = state.Survivor.Inventory;
 
-        if (choice.ItemReward != null)
-            inventory.AddItem(choice.ItemReward);
+        foreach (var item in choice.GetItemRewards())
+            inventory.AddItem(item, expandIfFull: true);
 
         ConsumeMentionedUsableItem(inventory, choice);
         WearMentionedDurableItem(inventory, choice);
