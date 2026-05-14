@@ -59,6 +59,7 @@ public partial class GameOverPage : ContentPage
         if (state == null)
         {
             ResultTitleLabel.Text = "การเดินทางครั้งนี้จบลงแล้ว";
+            CauseFrame.IsVisible = true;
             CauseTitleLabel.Text = "สาเหตุ";
             CauseLabel.Text = "ไม่พบข้อมูลเหตุการณ์สุดท้าย";
             DeathDetailLabel.Text = "ถ้าต้องการเริ่มใหม่ ให้กลับไปเลือกตัวละครอีกครั้ง";
@@ -70,6 +71,7 @@ public partial class GameOverPage : ContentPage
             : state.GameOverTitle;
 
         CauseTitleLabel.Text = state.IsStoryEnding ? "ฉากจบ" : "สาเหตุการตาย";
+        CauseFrame.IsVisible = !state.IsStoryEnding;
         CauseLabel.Text = state.IsStoryEnding
             ? "ใช้ฉากจบที่สอดคล้องกับเส้นเรื่องและเพศของตัวละคร"
             : string.IsNullOrWhiteSpace(state.DeathCause)

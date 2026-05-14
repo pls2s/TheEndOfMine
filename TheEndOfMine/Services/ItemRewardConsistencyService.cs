@@ -42,7 +42,7 @@ public static class ItemRewardConsistencyService
         new("stove", "เตาพกพา", "Stove", "Tool", ["เตาพกพา", "เตา", "stove"]),
         new("tape_roll", "เทปพันสายไฟ", "Tape Roll", "Tool", ["เทปพันสายไฟ", "เทป", "tape"]),
         new("torch", "คบเพลิง", "Torch", "Tool", ["คบเพลิง", "torch"]),
-        new("water_bottle", "ขวดน้ำ", "Water Bottle", "Water", ["ขวดน้ำ", "น้ำขวด", "น้ำดื่ม", "water bottle", "น้ำ"]),
+        new("water_bottle", "ขวดน้ำ", "Water Bottle", "Water", ["ขวดน้ำ", "น้ำขวด", "น้ำดื่ม", "น้ำสะอาด", "น้ำกรอง", "water bottle", "drinking water"]),
         new("water_filter", "เครื่องกรองน้ำ", "Water Filter", "Tool", ["เครื่องกรองน้ำ", "ที่กรองน้ำ", "water filter"]),
         new("whistle", "นกหวีด", "Whistle", "Tool", ["นกหวีด", "whistle"]),
         new("wrench", "ประแจ", "Wrench", "Tool", ["ประแจ", "wrench"])
@@ -100,12 +100,21 @@ public static class ItemRewardConsistencyService
         return item.Category.ToLowerInvariant() switch
         {
             "food" => Profiles.First(profile => profile.Alias == "canned_food"),
-            "water" => Profiles.First(profile => profile.Alias == "water_bottle"),
+            "water" when LooksLikeDrinkableWater(item) => Profiles.First(profile => profile.Alias == "water_bottle"),
             "medicine" or "medical" => Profiles.First(profile => profile.Alias == "first_aid_kit"),
             "weapon" => Profiles.First(profile => profile.Alias == "knife"),
             "tool" => Profiles.First(profile => profile.Alias == "wrench"),
             _ => null
         };
+    }
+
+    private static bool LooksLikeDrinkableWater(Item item)
+    {
+        var text = $"{item.NameTh} {item.NameEn} {item.Id} {item.Subcategory} {item.StoryAlias}".ToLowerInvariant();
+        if (ContainsAny(text, "น้ำมัน", "น้ำยา", "กันน้ำ", "ดำน้ำ", "ว่ายน้ำ", "น้ำตาล", "น้ำปลา", "waterproof", "oil"))
+            return false;
+
+        return ContainsAny(text, "ขวดน้ำ", "น้ำขวด", "น้ำดื่ม", "น้ำสะอาด", "น้ำกรอง", "น้ำฝน", "กระติกน้ำ", "water bottle", "drinking water", "canteen");
     }
 
     private static ItemProfile? BestProfileMatch(string text)
@@ -124,6 +133,11 @@ public static class ItemRewardConsistencyService
             .OrderByDescending(match => match.Score)
             .FirstOrDefault()
             ?.Profile;
+    }
+
+    private static bool ContainsAny(string text, params string[] tokens)
+    {
+        return tokens.Any(token => text.Contains(token, StringComparison.OrdinalIgnoreCase));
     }
 
     private static string RemoveGenericInventoryPhrases(string text)

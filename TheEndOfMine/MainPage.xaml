@@ -139,6 +139,28 @@
                             FontAttributes="Bold"
                             CornerRadius="7"
                             Padding="10,8" />
+
+                    <Button x:Name="DebugEndingButton"
+                            Text="END"
+                            Clicked="OnDebugEndingClicked"
+                            Opacity="0.08"
+                            HeightRequest="10"
+                            MinimumHeightRequest="10"
+                            BackgroundColor="#D8B45F"
+                            TextColor="#111111"
+                            FontSize="1"
+                            Padding="0" />
+
+                    <Button x:Name="DebugTutorialButton"
+                            Text="TUT"
+                            Clicked="OnDebugTutorialClicked"
+                            Opacity="0.08"
+                            HeightRequest="10"
+                            MinimumHeightRequest="10"
+                            BackgroundColor="#D8B45F"
+                            TextColor="#111111"
+                            FontSize="1"
+                            Padding="0" />
                 </VerticalStackLayout>
             </Border>
 
