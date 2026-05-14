@@ -26,6 +26,9 @@ public class EventChoice
     [JsonPropertyName("itemReward")]
     public Item? ItemReward { get; set; }
 
+    [JsonPropertyName("itemRewards")]
+    public List<Item> ItemRewards { get; set; } = new();
+
     [JsonPropertyName("items_add")]
     public List<string> ItemsAdd { get; set; } = new();
 
@@ -34,6 +37,15 @@ public class EventChoice
 
     [JsonPropertyName("resultText")]
     public string ResultText { get; set; } = string.Empty;
+
+    public IEnumerable<Item> GetItemRewards()
+    {
+        if (ItemReward != null)
+            yield return ItemReward;
+
+        foreach (var item in ItemRewards)
+            yield return item;
+    }
 }
 
 public class GameEvent

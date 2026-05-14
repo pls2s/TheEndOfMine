@@ -46,7 +46,7 @@ public class ImageGenerationService
                 });
             }
 
-            foreach (var item in gameEvent.Choices.Select(c => c.ItemReward).Where(i => i != null).Cast<Item>())
+            foreach (var item in gameEvent.Choices.SelectMany(choice => choice.GetItemRewards()))
                 AddItemImageJob(settings, imageJobs, item, state.CurrentChapter, cancellationToken);
         }
 

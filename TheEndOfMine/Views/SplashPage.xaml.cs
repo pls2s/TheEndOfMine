@@ -14,7 +14,6 @@ public partial class SplashPage : ContentPage
         base.OnAppearing();
 
         await Task.Delay(3000);
-        await SplashImage.FadeTo(0, 350, Easing.CubicIn);
 
         await Shell.Current.GoToAsync("//intro");
     }

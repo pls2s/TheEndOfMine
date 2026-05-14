@@ -56,10 +56,9 @@ public static class ItemRewardConsistencyService
 
     public static void Normalize(EventChoice choice)
     {
-        if (choice.ItemReward == null)
-            return;
+        foreach (var item in choice.GetItemRewards())
+            Normalize(item, $"{choice.Text} {choice.ResultText}");
 
-        Normalize(choice.ItemReward, $"{choice.Text} {choice.ResultText}");
         EnsureResultMentionsReward(choice);
     }
 
@@ -189,35 +188,63 @@ public static class ItemRewardConsistencyService
 
     private static void ApplyProfileEffects(Item item, string alias)
     {
-        if (alias != "backpack")
-            return;
-
         item.Effects ??= new ItemEffects();
-        item.Effects.IsContainer = true;
-        item.Effects.CarryCapacityBonus = Math.Max(4f, item.Effects.CarryCapacityBonus.GetValueOrDefault());
-        item.WeightKg = item.WeightKg <= 0 ? 1.1f : item.WeightKg;
-        item.DurabilityMax ??= 1;
-        item.Durability ??= item.DurabilityMax;
+
+        switch (alias)
+        {
+            case "canned_food":
+                item.Effects.HungerRestore = Math.Max(34f, item.Effects.HungerRestore.GetValueOrDefault());
+                item.Effects.OneTimeUse = true;
+                return;
+            case "water_bottle":
+            case "canteen":
+                item.Effects.ThirstRestore = Math.Max(38f, item.Effects.ThirstRestore.GetValueOrDefault());
+                item.Effects.OneTimeUse = true;
+                return;
+            case "first_aid_kit":
+                item.Effects.HpRestore = Math.Max(24f, item.Effects.HpRestore.GetValueOrDefault());
+                item.Effects.BiteInfectionReduce = Math.Max(10f, item.Effects.BiteInfectionReduce.GetValueOrDefault());
+                item.Effects.OneTimeUse = true;
+                return;
+            case "bandage":
+            case "antiseptic":
+            case "medicine_bottle":
+            case "painkillers":
+            case "sewing_kit":
+                item.Effects.HpRestore = Math.Max(16f, item.Effects.HpRestore.GetValueOrDefault());
+                item.Effects.BiteInfectionReduce = Math.Max(6f, item.Effects.BiteInfectionReduce.GetValueOrDefault());
+                item.Effects.OneTimeUse = true;
+                return;
+            case "backpack":
+                item.Effects.IsContainer = true;
+                item.Effects.CarryCapacityBonus = Math.Max(4f, item.Effects.CarryCapacityBonus.GetValueOrDefault());
+                item.WeightKg = item.WeightKg <= 0 ? 1.1f : item.WeightKg;
+                item.DurabilityMax ??= 1;
+                item.Durability ??= item.DurabilityMax;
+                return;
+        }
     }
 
     private static void EnsureResultMentionsReward(EventChoice choice)
     {
-        if (choice.ItemReward == null)
+        var rewardNames = choice.GetItemRewards()
+            .Select(item => string.IsNullOrWhiteSpace(item.NameTh) ? item.NameEn : item.NameTh)
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (rewardNames.Count == 0)
             return;
 
-        var rewardName = string.IsNullOrWhiteSpace(choice.ItemReward.NameTh)
-            ? choice.ItemReward.NameEn
-            : choice.ItemReward.NameTh;
-
-        if (string.IsNullOrWhiteSpace(rewardName) ||
-            choice.ResultText.Contains(rewardName, StringComparison.OrdinalIgnoreCase))
+        if (rewardNames.All(rewardName => choice.ResultText.Contains(rewardName, StringComparison.OrdinalIgnoreCase)))
         {
             return;
         }
 
+        var rewardText = string.Join(", ", rewardNames);
         choice.ResultText = string.IsNullOrWhiteSpace(choice.ResultText)
-            ? $"คุณเก็บ {rewardName} ใส่กระเป๋า"
-            : $"{choice.ResultText}\nคุณเก็บ {rewardName} ใส่กระเป๋า";
+            ? $"คุณเก็บ {rewardText} ใส่กระเป๋า"
+            : $"{choice.ResultText}\nคุณเก็บ {rewardText} ใส่กระเป๋า";
     }
 
     private sealed record ItemProfile(

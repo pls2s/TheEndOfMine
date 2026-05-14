@@ -25,7 +25,15 @@
 
             <!-- ส่วนบน: Status & Inventory -->
             <Grid Grid.Row="0" ColumnDefinitions="*, Auto">
-                <Frame x:Name="StatusPanel" Grid.Column="0" BackgroundColor="#88000000" BorderColor="#555555" Padding="10" CornerRadius="5" HorizontalOptions="Start">
+                <Border x:Name="StatusPanel"
+                        Grid.Column="0"
+                        BackgroundColor="#88000000"
+                        Stroke="#555555"
+                        Padding="10"
+                        HorizontalOptions="Start">
+                    <Border.StrokeShape>
+                        <RoundRectangle CornerRadius="5" />
+                    </Border.StrokeShape>
                     <VerticalStackLayout Spacing="6" WidthRequest="168">
                         <Grid ColumnDefinitions="44, *" ColumnSpacing="8">
                             <Image Source="story/ui/ui_hp_icon.png" WidthRequest="42" HeightRequest="28" Aspect="AspectFit" HorizontalOptions="Center" VerticalOptions="Center" BackgroundColor="Transparent" />
@@ -53,7 +61,7 @@
                         </Grid>
                         <Label Text="{Binding SurvivalPressureDisplay}" TextColor="#AFA694" FontSize="10" HorizontalOptions="Center" />
                     </VerticalStackLayout>
-                </Frame>
+                </Border>
 
                 <VerticalStackLayout x:Name="TopActionPanel" Grid.Column="1" Spacing="2" HorizontalOptions="End">
                     <ImageButton x:Name="InventoryButton"
@@ -140,7 +148,7 @@
                     Text="{Binding GoOutsideButtonText}"
                     Command="{Binding GoOutsideCommand}"
                     Clicked="OnGoOutsideClicked"
-                    AbsoluteLayout.LayoutBounds="0.0001, 0.4, 110, 45"
+                    AbsoluteLayout.LayoutBounds="0.0001, 0.35, 110, 45"
                     AbsoluteLayout.LayoutFlags="PositionProportional"
                     BackgroundColor="#88000000" TextColor="White" BorderColor="Gray" BorderWidth="1" CornerRadius="5" />
 
@@ -149,18 +157,19 @@
                          AbsoluteLayout.LayoutFlags="PositionProportional"
                          Spacing="5">
 
-                    <!-- ใช้ Frame ครอบ Label เพื่อสร้างกล่องที่มีขอบและพื้นหลัง -->
-                    <Frame BackgroundColor="#88000000" 
-               BorderColor="Gray" 
-               CornerRadius="5" 
-               Padding="0,8" 
-               HasShadow="False">
+                    <!-- ใช้ Border ครอบ Label เพื่อสร้างกล่องที่มีขอบและพื้นหลัง -->
+                    <Border BackgroundColor="#88000000"
+                            Stroke="Gray"
+                            Padding="0,8">
+                        <Border.StrokeShape>
+                            <RoundRectangle CornerRadius="5" />
+                        </Border.StrokeShape>
 
                         <Label Text="REST / SLEEP" 
                    TextColor="LightGray" 
                    HorizontalOptions="Center" 
                    FontAttributes="Bold"/>
-                    </Frame>
+                    </Border>
 
                     <Button x:Name="Btn4H" Text="4 HOURS" 
                 BackgroundColor="#88000000" TextColor="White" BorderColor="Gray" BorderWidth="1" CornerRadius="5"
@@ -175,21 +184,35 @@
 
             <!-- ส่วนล่าง: Skills & Time -->
             <Grid Grid.Row="2" ColumnDefinitions="Auto, *">
-                <Frame Grid.Column="0" BackgroundColor="#88000000" BorderColor="#555555" Padding="10" CornerRadius="5">
+                <Border Grid.Column="0"
+                        BackgroundColor="#88000000"
+                        Stroke="#555555"
+                        Padding="10">
+                    <Border.StrokeShape>
+                        <RoundRectangle CornerRadius="5" />
+                    </Border.StrokeShape>
                     <VerticalStackLayout Spacing="2">
                         <Label Text="SKILLS" TextColor="#D4A017" FontAttributes="Bold" HorizontalOptions="Center" />
                         <Label Text="🗡 Melee EXP" TextColor="LightGray" FontSize="12" />
                         <Label Text="🔍 Scavenge EXP" TextColor="LightGray" FontSize="12" />
                         <Label Text="💧 Wioating EXP" TextColor="LightGray" FontSize="12" />
                     </VerticalStackLayout>
-                </Frame>
+                </Border>
 
-                <Frame x:Name="TimePanel" Grid.Column="1" BackgroundColor="#88000000" BorderColor="#555555" Padding="10" CornerRadius="5" Margin="10,0,0,0">
+                <Border x:Name="TimePanel"
+                        Grid.Column="1"
+                        BackgroundColor="#88000000"
+                        Stroke="#555555"
+                        Padding="10"
+                        Margin="10,0,0,0">
+                    <Border.StrokeShape>
+                        <RoundRectangle CornerRadius="5" />
+                    </Border.StrokeShape>
                     <VerticalStackLayout HorizontalOptions="Center" VerticalOptions="Center">
                         <Label Text="{Binding DayTimeDisplay}" TextColor="White" FontSize="18" FontAttributes="Bold" HorizontalOptions="Center" />
                         <Label Text="(1 real second = 1 game minute)" TextColor="Gray" FontSize="10" HorizontalOptions="Center" />
                     </VerticalStackLayout>
-                </Frame>
+                </Border>
             </Grid>
         </Grid>
         <!-- จบเลเยอร์ UI หลัก -->

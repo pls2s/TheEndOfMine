@@ -17,13 +17,22 @@ public class GameEngine
 
     // 1 real second = 1 game minute
     private const int TickIntervalMs = 1000;
-    private const int EventMinMinutes = 25;
-    private const int EventMaxMinutes = 50;
+    private const int EventDurationMinutes = 720;
     private const float PassiveNoiseDecayPerMinute = 0.12f;
     private const float InfectionWarningThreshold = 25f;
     private const float InfectionHpDamagePerMinute = 0.018f;
     private const float InfectionGrowthPerMinute = 0.004f;
     private const float NoisyEventThreshold = 55f;
+    private const float FatigueSoftThreshold = 55f;
+    private const float FatigueMidThreshold = 70f;
+    private const float FatigueHighThreshold = 85f;
+    private const float FatigueCriticalThreshold = 95f;
+    private const float FatigueStrainHpPerMinute = 0.04f;
+    private const float ThirstSoftThreshold = 45f;
+    private const float ThirstMidThreshold = 30f;
+    private const float ThirstHighThreshold = 15f;
+    private const float ThirstCriticalThreshold = 5f;
+    private const float ThirstStrainHpPerMinute = 0.025f;
 
     // ---- Public State ----
     public GameState? CurrentState { get; private set; }
@@ -97,12 +106,10 @@ public class GameEngine
 
     // ---- Player Actions ----
 
-    // ออกสำรวจ → เหนื่อยขึ้น + trigger event ถัดไปใน story
+    // ออกสำรวจ → trigger event ถัดไปใน story
     public async Task GoOutsideAsync()
     {
         if (CurrentState?.Status != GameStatus.Running || _isEventInProgress) return;
-
-        ApplyStatChange(fatigueDelta: 5f);
 
         var gameEvent = await _eventService.GetNextEventAsync(CurrentState.EventIndex, CurrentState.GeneratedEvents);
         if (gameEvent == null && CurrentState.GeneratedEvents.Count > 0)
@@ -112,15 +119,6 @@ public class GameEngine
 
         if (gameEvent != null)
         {
-            AdvanceEventTime();
-            ApplyNoiseAmbushRisk();
-            CheckDeath();
-            if (CurrentState.Status != GameStatus.Running)
-            {
-                NotifyStateChanged();
-                return;
-            }
-
             // เดิน index ไปข้างหน้าก่อน invoke เพื่อไม่ให้ซ้ำถ้า save ระหว่าง event
             _isEventInProgress = true;
             _activeEvent = gameEvent;
@@ -197,8 +195,8 @@ public class GameEngine
             minutes: 480,
             fatigueDelta: -60f,
             hungerDelta: -15f,
-            thirstDelta: -20f);
-        CheckDeath();
+            thirstDelta: -20f,
+            applyHpDamage: false);
 
         if (CurrentState.Status == GameStatus.Running)
         {
@@ -219,16 +217,24 @@ public class GameEngine
         RecordStoryMemory(resolvedEvent, choice);
         _activeEvent = null;
 
+        var rates = _difficultyService.GetDecayRates(CurrentState.Difficulty);
         ApplyStatChange(
-            hpDelta: NormalizePositiveHpEffect(choice),
-            hungerDelta: choice.HungerEffect,
-            thirstDelta: choice.ThirstEffect,
-            fatigueDelta: choice.FatigueEffect
+            hpDelta: ScaleNegativeEffect(NormalizePositiveHpEffect(choice), rates.DamageMultiplier),
+            hungerDelta: ScaleNegativeEffect(choice.HungerEffect, rates.DamageMultiplier),
+            thirstDelta: ScaleNegativeEffect(choice.ThirstEffect, rates.DamageMultiplier),
+            fatigueDelta: ScaleFatiguePenalty(choice.FatigueEffect, rates.DamageMultiplier)
         );
         ApplyChoiceSurvivalPressure(choice);
         InventoryChoiceEffectService.Apply(CurrentState, choice);
 
         CheckDeath(BuildChoiceDeathCause(resolvedEvent, choice));
+        if (CurrentState.Status == GameStatus.Running)
+        {
+            AdvanceEventTime();
+            ApplyNoiseAmbushRisk();
+            CheckDeath();
+        }
+
         if (CurrentState.Status == GameStatus.Running)
             _saveService.SaveCheckpoint(CurrentState);
         NotifyStateChanged();
@@ -268,13 +274,15 @@ public class GameEngine
 
         // เดินหน้า 1 นาทีในเกม
         var newDayStarted = AdvanceClockOneMinute();
+        var fatiguePressure = GetFatiguePressureMultiplier();
+        var thirstPressure = GetThirstPressureMultiplier();
 
         // ลด stats ตามอัตราของระดับความยาก
         var rates = _difficultyService.GetDecayRates(CurrentState.Difficulty);
         ApplyStatChange(
-            hungerDelta: -rates.HungerDecay,
-            thirstDelta: -rates.ThirstDecay,
-            fatigueDelta: rates.FatigueDecay
+            hungerDelta: -rates.HungerDecay * fatiguePressure * thirstPressure,
+            thirstDelta: -rates.ThirstDecay * thirstPressure,
+            fatigueDelta: rates.FatigueDecay * fatiguePressure * thirstPressure
         );
 
         if (newDayStarted)
@@ -282,6 +290,8 @@ public class GameEngine
 
         ApplySurvivalDamage();
         DecayEnvironmentalPressure();
+        ApplyFatigueStrainDamage();
+        ApplyThirstStrainDamage();
 
         CheckDeath();
         MainThread.BeginInvokeOnMainThread(NotifyStateChanged);
@@ -291,14 +301,16 @@ public class GameEngine
     {
         if (CurrentState == null) return 0;
 
-        var minutes = Random.Shared.Next(EventMinMinutes, EventMaxMinutes + 1);
+        var minutes = EventDurationMinutes;
         var rates = _difficultyService.GetDecayRates(CurrentState.Difficulty);
+        var fatiguePressure = GetFatiguePressureMultiplier();
+        var thirstPressure = GetThirstPressureMultiplier();
 
         AdvanceTimeWithSurvivalCosts(
             minutes,
-            fatigueDelta: rates.FatigueDecay * minutes,
-            hungerDelta: -rates.HungerDecay * minutes,
-            thirstDelta: -rates.ThirstDecay * minutes);
+            fatigueDelta: rates.FatigueDecay * minutes * fatiguePressure * thirstPressure,
+            hungerDelta: -rates.HungerDecay * minutes * fatiguePressure * thirstPressure,
+            thirstDelta: -rates.ThirstDecay * minutes * thirstPressure);
 
         return minutes;
     }
@@ -315,8 +327,16 @@ public class GameEngine
             damage += rates.StarveHpDecay;
         if (s.Thirst <= 0)
             damage += rates.DehydrateHpDecay;
+        if (s.Thirst <= 20)
+            damage += 0.03f;
+        if (s.Thirst <= 5)
+            damage += 0.08f;
         if (CurrentState.Infection >= InfectionWarningThreshold)
             damage += InfectionHpDamagePerMinute * (CurrentState.Infection / 25f);
+        if (s.Fatigue >= FatigueHighThreshold)
+            damage += 0.03f;
+        if (s.Fatigue >= FatigueCriticalThreshold)
+            damage += 0.08f;
 
         if (damage > 0)
             ApplyStatChange(hpDelta: -damage);
@@ -326,7 +346,8 @@ public class GameEngine
         int minutes,
         float fatigueDelta,
         float hungerDelta,
-        float thirstDelta)
+        float thirstDelta,
+        bool applyHpDamage = true)
     {
         if (CurrentState == null || minutes <= 0) return;
 
@@ -337,19 +358,30 @@ public class GameEngine
         for (var i = 0; i < minutes; i++)
         {
             var newDayStarted = AdvanceClockOneMinute();
+            var fatiguePressure = GetFatiguePressureMultiplier();
+            var thirstPressure = GetThirstPressureMultiplier();
+            var fatigueApplied = fatiguePerMinute >= 0
+                ? fatiguePerMinute * fatiguePressure
+                : fatiguePerMinute;
 
             ApplyStatChange(
-                hungerDelta: hungerPerMinute,
-                thirstDelta: thirstPerMinute,
-                fatigueDelta: fatiguePerMinute);
+                hungerDelta: hungerPerMinute * fatiguePressure * thirstPressure,
+                thirstDelta: thirstPerMinute * thirstPressure,
+                fatigueDelta: fatigueApplied);
 
             if (newDayStarted)
                 SaveDailyCheckpoint();
 
-            ApplySurvivalDamage();
+            if (applyHpDamage)
+                ApplySurvivalDamage();
             DecayEnvironmentalPressure();
+            if (applyHpDamage)
+            {
+                ApplyFatigueStrainDamage();
+                ApplyThirstStrainDamage();
+            }
 
-            if (CurrentState.Survivor.HP <= 0)
+            if (applyHpDamage && CurrentState.Survivor.HP <= 0)
                 break;
         }
     }
@@ -402,6 +434,11 @@ public class GameEngine
             return;
 
         var risk = Math.Clamp(CurrentState.Noise / 100f, 0f, 1f);
+        if (CurrentState.Survivor.Fatigue >= FatigueHighThreshold)
+            risk += 0.12f;
+        if (CurrentState.Survivor.Fatigue >= FatigueCriticalThreshold)
+            risk += 0.18f;
+
         if (Random.Shared.NextDouble() > risk * 0.45f)
             return;
 
@@ -422,8 +459,16 @@ public class GameEngine
             return;
 
         var s = CurrentState.Survivor;
-        if (s.Hunger <= 15 || s.Thirst <= 15 || s.Fatigue >= 85)
-            CurrentState.Infection = Math.Clamp(CurrentState.Infection + InfectionGrowthPerMinute, 0f, 100f);
+        var infectionPressure = 1f;
+        if (s.Fatigue >= FatigueHighThreshold)
+            infectionPressure += 1f;
+        if (s.Thirst <= ThirstMidThreshold)
+            infectionPressure += 0.35f;
+        if (s.Thirst <= ThirstHighThreshold)
+            infectionPressure += 0.35f;
+
+        if (s.Hunger <= 15 || s.Thirst <= 15 || s.Fatigue >= FatigueMidThreshold)
+            CurrentState.Infection = Math.Clamp(CurrentState.Infection + InfectionGrowthPerMinute * infectionPressure, 0f, 100f);
         else
             CurrentState.Infection = Math.Clamp(CurrentState.Infection - InfectionGrowthPerMinute * 0.5f, 0f, 100f);
     }
@@ -439,6 +484,16 @@ public class GameEngine
             return choice.HpEffect;
 
         return IsHealingOrNutritionChoice(choice) ? choice.HpEffect : 0f;
+    }
+
+    private static float ScaleNegativeEffect(float value, float multiplier)
+    {
+        return value < 0f ? value * multiplier : value;
+    }
+
+    private static float ScaleFatiguePenalty(float value, float multiplier)
+    {
+        return value > 0f ? value * multiplier : value;
     }
 
     private static bool IsHealingOrNutritionChoice(EventChoice choice)
@@ -492,9 +547,13 @@ public class GameEngine
 
     private static string BuildMemorySummary(GameEvent gameEvent, EventChoice choice)
     {
-        var reward = choice.ItemReward == null
+        var rewardNames = choice.GetItemRewards()
+            .Select(item => string.IsNullOrWhiteSpace(item.NameTh) ? item.NameEn : item.NameTh)
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .ToList();
+        var reward = rewardNames.Count == 0
             ? string.Empty
-            : $" ได้รับ {choice.ItemReward.NameTh}.";
+            : $" ได้รับ {string.Join(", ", rewardNames)}.";
 
         return Truncate($"{gameEvent.Title}: เลือก \"{choice.Text}\" ผลคือ {choice.ResultText}.{reward}", 260);
     }
@@ -623,10 +682,123 @@ public class GameEngine
             return "การติดเชื้อในร่างกายลุกลามเกินควบคุม ไข้และบาดแผลทำให้เลือดลดลงจนเสียชีวิต";
         if (state.Noise >= NoisyEventThreshold)
             return "เสียงที่สะสมไว้ดึงอันตรายเข้ามาใกล้เกินไป คุณถูกโจมตีจนบาดเจ็บถึงชีวิต";
-        if (s.Fatigue >= 95)
+        if (s.Fatigue >= FatigueHighThreshold)
             return "ความเหนื่อยล้าสะสมทำให้ตัดสินใจช้าลงและทรุดลงก่อนจะหาที่ปลอดภัยได้";
 
         return "บาดแผลและความเสี่ยงที่สะสมระหว่างทางทำให้ร่างกายรับไม่ไหวและเสียชีวิต";
+    }
+
+    private float GetFatiguePressureMultiplier()
+    {
+        if (CurrentState == null)
+            return 1f;
+
+        var fatigue = CurrentState.Survivor.Fatigue;
+        if (fatigue <= FatigueSoftThreshold)
+            return 1f;
+
+        if (fatigue >= FatigueCriticalThreshold)
+            return 1.55f;
+
+        if (fatigue >= FatigueHighThreshold)
+            return 1.35f;
+
+        return 1.15f;
+    }
+
+    private float GetFatigueActionPenalty()
+    {
+        if (CurrentState == null)
+            return 0f;
+
+        var fatigue = CurrentState.Survivor.Fatigue;
+        if (fatigue < FatigueMidThreshold)
+            return 0f;
+
+        return fatigue >= FatigueCriticalThreshold
+            ? 10f
+            : fatigue >= FatigueHighThreshold
+                ? 7f
+                : 4f;
+    }
+
+    private float GetThirstPressureMultiplier()
+    {
+        if (CurrentState == null)
+            return 1f;
+
+        var thirst = CurrentState.Survivor.Thirst;
+        if (thirst > ThirstSoftThreshold)
+            return 1f;
+
+        if (thirst <= ThirstCriticalThreshold)
+            return 1.6f;
+
+        if (thirst <= ThirstHighThreshold)
+            return 1.35f;
+
+        if (thirst <= ThirstMidThreshold)
+            return 1.15f;
+
+        return 1f;
+    }
+
+    private float GetThirstActionPenalty()
+    {
+        if (CurrentState == null)
+            return 0f;
+
+        var thirst = CurrentState.Survivor.Thirst;
+        if (thirst > ThirstMidThreshold)
+            return 0f;
+
+        return thirst <= ThirstCriticalThreshold
+            ? 10f
+            : thirst <= ThirstHighThreshold
+                ? 7f
+                : 4f;
+    }
+
+    private void ApplyFatigueStrainDamage()
+    {
+        if (CurrentState == null)
+            return;
+
+        var fatigue = CurrentState.Survivor.Fatigue;
+        if (fatigue < FatigueHighThreshold)
+            return;
+
+        var damage = FatigueStrainHpPerMinute;
+        if (fatigue >= FatigueCriticalThreshold)
+            damage += 0.08f;
+        else
+            damage += 0.03f;
+
+        if (CurrentState.Survivor.Hunger <= 15 || CurrentState.Survivor.Thirst <= 15)
+            damage += 0.02f;
+
+        ApplyStatChange(hpDelta: -damage);
+    }
+
+    private void ApplyThirstStrainDamage()
+    {
+        if (CurrentState == null)
+            return;
+
+        var thirst = CurrentState.Survivor.Thirst;
+        if (thirst > ThirstHighThreshold)
+            return;
+
+        var damage = ThirstStrainHpPerMinute;
+        if (thirst <= ThirstCriticalThreshold)
+            damage += 0.10f;
+        else if (thirst <= ThirstHighThreshold)
+            damage += 0.05f;
+
+        if (CurrentState.Survivor.Fatigue >= FatigueHighThreshold)
+            damage += 0.02f;
+
+        ApplyStatChange(hpDelta: -damage);
     }
 
     private bool AdvanceClockOneMinute()

@@ -14,11 +14,12 @@
                Source="story/female/female_select_char.png"  
                Aspect="AspectFill" />
 
-            <!-- ม่านดำสำหรับตอนเฟดสลับตัวละคร -->
-            <BoxView x:Name="FadeOverlay"
-                 Color="Black"
-                 Opacity="0"
-                 InputTransparent="True" />
+            <!-- เลเยอร์ภาพทับสำหรับ crossfade ตอนสลับตัวละคร -->
+            <Image x:Name="TransitionImage"
+                   Source="story/female/female_select_char.png"
+                   Aspect="AspectFill"
+                   Opacity="0"
+                   InputTransparent="True" />
             <AbsoluteLayout x:Name="SelectionUI">
                 <!-- ปุ่มเลือกชาย -->
                 <ImageButton x:Name="MaleButton" 

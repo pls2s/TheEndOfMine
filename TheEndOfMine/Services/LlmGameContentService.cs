@@ -47,6 +47,21 @@ public class LlmGameContentService
         WriteIndented = false
     };
 
+    private static readonly string[] FallbackRewardNames =
+    [
+        "น้ำกรองขวดเล็ก",
+        "น้ำดื่มขวดเล็ก",
+        "กระติกน้ำเก่า",
+        "น้ำสะอาดครึ่งขวด",
+        "ผ้าพันแผลสะอาด",
+        "อาหารกระป๋องบุบ",
+        "อาหารแห้งห่อเล็ก",
+        "มีดพับขึ้นสนิม",
+        "ไฟฉายมือหมุน",
+        "ยาแก้ปวดเหลือครึ่งแผง",
+        "เชือกขาดครึ่ง"
+    ];
+
     private static readonly HttpClient HttpClient = new()
     {
         Timeout = TimeSpan.FromSeconds(120)
@@ -313,13 +328,13 @@ public class LlmGameContentService
         - ถ้าผู้เล่น Noise สูง ให้เขียน event ที่ศัตรู/อันตรายถูกดึงดูดจากเสียงอย่างสมเหตุผล
         - ถ้าผู้เล่น Infection สูง ให้เขียนอาการเช่นหนาวสั่น ไข้ แผลบวม มือสั่น หรือการตัดสินใจที่ยากขึ้น
         - ตัวเลือกที่ใช้ยา ทำแผล พันแผล หรือปฐมพยาบาลต้องลดความเสี่ยงติดเชื้อใน resultText และห้ามรักษาหายทันทีแบบเวทมนตร์
-        - ใส่ itemReward ให้ choice จำนวน 4 จุดพอดี โดย itemReward ต้องเป็น item object ครบถ้วน
-        - ทุก itemReward และ startingItems ต้องมี story_alias ที่เลือกจากรายการ item.story_alias ด้านบน
+        - ใส่ itemRewards รวมทั้ง chapter อย่างน้อย 10 ชิ้น โดย itemRewards เป็น array ของ item object ครบถ้วน และ 1 choice ให้ได้ 1-3 ชิ้นได้ตามบริบท
+        - ทุก itemRewards, itemReward และ startingItems ต้องมี story_alias ที่เลือกจากรายการ item.story_alias ด้านบน
         - story_alias ของไอเทมต้องตรงกับชื่อและคำอธิบาย เช่น ชุดปฐมพยาบาลต้องใช้ first_aid_kit, ผ้าพันแผลต้องใช้ bandage, ขวดน้ำต้องใช้ water_bottle, อาหารกระป๋องต้องใช้ canned_food, ไฟฉายต้องใช้ flashlight
-        - ถ้า choice ให้ itemReward ต้องเขียน resultText ให้ระบุชื่อไอเทมนั้นตรง ๆ ห้ามเล่าอย่างหนึ่งแต่ให้ของอีกอย่าง
-        - choice อื่นที่ไม่ได้ให้ไอเทมห้ามใส่ key itemReward
+        - ถ้า choice ให้ itemRewards/itemReward ต้องเขียน resultText ให้ระบุชื่อไอเทมเหล่านั้นตรง ๆ ห้ามเล่าอย่างหนึ่งแต่ให้ของอีกอย่าง
+        - choice อื่นที่ไม่ได้ให้ไอเทมห้ามใส่ key itemRewards หรือ itemReward
         - ทุก event ต้องมี imagePrompt เป็นภาษาอังกฤษ สำหรับสร้างภาพประกอบแบบ realistic gritty survival game art, no text, no UI, no logo
-        - ทุก item ใน startingItems และ itemReward ต้องมี image_prompt เป็นภาษาอังกฤษ สำหรับสร้างภาพไอเทมเดี่ยวบนพื้นหลังเรียบ, no text, no logo
+        - ทุก item ใน startingItems, itemRewards และ itemReward ต้องมี image_prompt เป็นภาษาอังกฤษ สำหรับสร้างภาพไอเทมเดี่ยวบนพื้นหลังเรียบ, no text, no logo
         {{startingItemsRule}}
         {{endingRule}}
         - chapter นี้ต้องมีเป้าหมายหลักหนึ่งอย่างที่ชัดเจน และทุก event ต้องผลักผู้เล่นเข้าใกล้หรือไกลจากเป้าหมายนั้น
@@ -357,29 +372,31 @@ public class LlmGameContentService
                   "thirstEffect": 0,
                   "fatigueEffect": 0,
                   "resultText": "string",
-                  "itemReward": {
-                    "id": "gen_item_id",
-                    "name_th": "string",
-                    "name_en": "string",
-                    "category": "Food|Water|Medicine|Weapon|Tool|Misc",
-                    "subcategory": "string",
-                    "rarity": "common|uncommon|rare",
-                    "weight_kg": 1,
-                    "trade_value": 1,
-                    "stackable": false,
-                    "max_stack": 1,
-                    "found_in": ["generated_story"],
-                    "durability_max": 1,
-                    "effects": {
-                      "hp_restore": 0,
-                      "hunger_restore": 0,
-                      "thirst_restore": 0,
-                      "fatigue_restore": 0
-                    },
-                    "description_th": "string",
-                    "image_prompt": "English item image prompt",
-                    "story_alias": "alias_from_item_list"
-                  }
+                  "itemRewards": [
+                    {
+                      "id": "gen_item_id",
+                      "name_th": "string",
+                      "name_en": "string",
+                      "category": "Food|Water|Medicine|Weapon|Tool|Misc",
+                      "subcategory": "string",
+                      "rarity": "common|uncommon|rare",
+                      "weight_kg": 1,
+                      "trade_value": 1,
+                      "stackable": false,
+                      "max_stack": 1,
+                      "found_in": ["generated_story"],
+                      "durability_max": 1,
+                      "effects": {
+                        "hp_restore": 0,
+                        "hunger_restore": 0,
+                        "thirst_restore": 0,
+                        "fatigue_restore": 0
+                      },
+                      "description_th": "string",
+                      "image_prompt": "English item image prompt",
+                      "story_alias": "alias_from_item_list"
+                    }
+                  ]
                 }
               ]
             }
@@ -589,24 +606,33 @@ public class LlmGameContentService
                 choice.Text = ThaiNarrativeTextNormalizer.Normalize(choice.Text);
                 choice.ResultText = ThaiNarrativeTextNormalizer.Normalize(choice.ResultText);
 
-                if (choice.ItemReward != null)
+                if (choice.ItemReward != null && choice.ItemRewards.Count > 2)
+                    choice.ItemRewards = choice.ItemRewards.Take(2).ToList();
+                else if (choice.ItemRewards.Count > 3)
+                    choice.ItemRewards = choice.ItemRewards.Take(3).ToList();
+
+                var rewardIndex = 0;
+                foreach (var item in choice.GetItemRewards().ToList())
                 {
-                    NormalizeItem(choice.ItemReward, $"reward_{i + 1}_{c + 1}", assetCatalog);
-                    ItemRewardConsistencyService.Normalize(choice);
+                    NormalizeItem(item, $"reward_{i + 1}_{c + 1}_{rewardIndex + 1}", assetCatalog);
+                    rewardIndex++;
                     rewardCount++;
-                    if (rewardCount > 5)
-                        choice.ItemReward = null;
                 }
-                else if (choice.ItemsAdd.Count > 0)
+
+                if (choice.ItemsAdd.Count > 0 && GetRewardCount(choice) < 3)
                 {
-                    choice.ItemReward = CreateFallbackItemFromStoryTreeReference(choice.ItemsAdd[0], $"story_tree_{i + 1}_{c + 1}");
-                    NormalizeItem(choice.ItemReward, $"story_tree_{i + 1}_{c + 1}", assetCatalog);
-                    ItemRewardConsistencyService.Normalize(choice);
-                    ItemRewardConsistencyService.Normalize(choice.ItemReward);
-                    rewardCount++;
-                    if (rewardCount > 5)
-                        choice.ItemReward = null;
+                    foreach (var itemReference in choice.ItemsAdd.Take(3 - GetRewardCount(choice)))
+                    {
+                        var item = CreateFallbackItemFromStoryTreeReference(itemReference, $"story_tree_{i + 1}_{c + 1}_{rewardIndex + 1}");
+                        AddReward(choice, item);
+                        NormalizeItem(item, $"story_tree_{i + 1}_{c + 1}_{rewardIndex + 1}", assetCatalog);
+                        ItemRewardConsistencyService.Normalize(item);
+                        rewardIndex++;
+                        rewardCount++;
+                    }
                 }
+
+                ItemRewardConsistencyService.Normalize(choice);
 
                 if (choice.HpEffect > 0 && !AllowsPositiveHpRecovery(choice))
                     choice.HpEffect = 0;
@@ -619,9 +645,98 @@ public class LlmGameContentService
             NormalizeItem(content.StartingItems[i], $"start_{i + 1}", assetCatalog);
             ItemRewardConsistencyService.Normalize(content.StartingItems[i]);
         }
+
+        EnsureMinimumItemRewards(content, assetCatalog, rewardCount, Math.Min(14, Math.Max(10, eventsPerChapter * 2)));
+        EnsureBalancedResourceRewards(content, assetCatalog, eventsPerChapter);
     }
 
     private static float ClampEffect(float value) => Math.Clamp(value, -30f, 30f);
+
+    private static int GetRewardCount(EventChoice choice) => choice.GetItemRewards().Count();
+
+    private static void AddReward(EventChoice choice, Item item)
+    {
+        if (choice.ItemReward == null)
+            choice.ItemReward = item;
+        else
+            choice.ItemRewards.Add(item);
+    }
+
+    private void EnsureMinimumItemRewards(
+        GeneratedGameContent content,
+        StoryAssetCatalog assetCatalog,
+        int currentRewardCount,
+        int targetRewardCount)
+    {
+        if (currentRewardCount >= targetRewardCount)
+            return;
+
+        var rewardCount = currentRewardCount;
+        foreach (var gameEvent in content.Events)
+        {
+            foreach (var choice in gameEvent.Choices)
+            {
+                if (rewardCount >= targetRewardCount)
+                    return;
+
+                if (GetRewardCount(choice) >= 3)
+                    continue;
+
+                var fallbackName = FallbackRewardNames[Random.Shared.Next(FallbackRewardNames.Length)];
+                var item = CreateFallbackItem(fallbackName, $"bonus_{rewardCount + 1}_{gameEvent.Id}_{choice.Id}");
+                AddReward(choice, item);
+                NormalizeItem(item, $"bonus_{rewardCount + 1}_{gameEvent.Id}_{choice.Id}", assetCatalog);
+                ItemRewardConsistencyService.Normalize(choice);
+                rewardCount++;
+            }
+        }
+    }
+
+    private void EnsureBalancedResourceRewards(
+        GeneratedGameContent content,
+        StoryAssetCatalog assetCatalog,
+        int eventsPerChapter)
+    {
+        var targetFood = Math.Max(3, eventsPerChapter);
+        var targetWater = Math.Max(5, eventsPerChapter + 1);
+
+        EnsureResourceReward(content, assetCatalog, "Food", targetFood, "อาหารกระป๋องบุบ");
+        EnsureResourceReward(content, assetCatalog, "Water", targetWater, "น้ำกรองขวดเล็ก");
+    }
+
+    private void EnsureResourceReward(
+        GeneratedGameContent content,
+        StoryAssetCatalog assetCatalog,
+        string category,
+        int targetCount,
+        string fallbackName)
+    {
+        var currentCount = content.Events
+            .SelectMany(gameEvent => gameEvent.Choices)
+            .SelectMany(choice => choice.GetItemRewards())
+            .Count(item => item.Category.Equals(category, StringComparison.OrdinalIgnoreCase));
+
+        if (currentCount >= targetCount)
+            return;
+
+        foreach (var gameEvent in content.Events)
+        {
+            foreach (var choice in gameEvent.Choices)
+            {
+                if (currentCount >= targetCount)
+                    return;
+
+                if (GetRewardCount(choice) >= 3)
+                    continue;
+
+                var item = CreateFallbackItem(fallbackName, $"resource_{category.ToLowerInvariant()}_{currentCount + 1}_{gameEvent.Id}_{choice.Id}");
+                AddReward(choice, item);
+                NormalizeItem(item, $"resource_{category.ToLowerInvariant()}_{currentCount + 1}_{gameEvent.Id}_{choice.Id}", assetCatalog);
+                ItemRewardConsistencyService.Normalize(choice);
+                currentCount++;
+            }
+        }
+    }
 
     private static void NormalizeChoiceItemContext(EventChoice choice)
     {
@@ -1018,7 +1133,9 @@ public class LlmGameContentService
                         ThirstEffect = -Random.Shared.Next(0, 10),
                         FatigueEffect = Random.Shared.Next(8, 24),
                         ResultText = $"คุณฝ่าเข้าไปจนพบเบาะแสเพิ่มเกี่ยวกับ{objective} แต่เสียงของ{recurringThreat}ดังใกล้ขึ้น. {nextLead}",
-                        ItemReward = i % 2 == 0 ? CreateFallbackItem(itemNames[Random.Shared.Next(itemNames.Length)], $"reward_{seed}_{i}") : null
+                        ItemReward = i < Math.Min(6, eventsPerChapter)
+                            ? CreateFallbackItem(itemNames[Random.Shared.Next(itemNames.Length)], $"reward_{seed}_{i}")
+                            : null
                     },
                     new()
                     {
@@ -1090,9 +1207,9 @@ public class LlmGameContentService
             Durability = durability,
             Effects = new ItemEffects
             {
-                HpRestore = category == "Medicine" ? 15 : 0,
-                HungerRestore = category == "Food" ? 20 : 0,
-                ThirstRestore = category == "Water" ? 20 : 0
+                HpRestore = category == "Medicine" ? 20 : 0,
+                HungerRestore = category == "Food" ? 34 : 0,
+                ThirstRestore = category == "Water" ? 38 : 0
             },
             DescriptionTh = "ไอเทมเริ่มต้นจากเรื่องราวที่สุ่มขึ้นสำหรับรอบนี้",
             StoryAlias = $"gen_{id}"

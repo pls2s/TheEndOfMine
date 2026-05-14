@@ -82,9 +82,10 @@ public partial class EventPopup : ContentPage
             ? choice.ResultText
             : $"{choice.ResultText}\n\n{choice.InventoryEffectNote}";
 
-        if (choice.ItemReward != null)
+        var rewards = choice.GetItemRewards().ToList();
+        if (rewards.Count > 0)
         {
-            RewardLabel.Text = $"ได้รับ: {choice.ItemReward.NameTh}";
+            RewardLabel.Text = $"ได้รับ: {string.Join(", ", rewards.Select(item => item.NameTh))}";
             RewardLabel.IsVisible = true;
         }
 

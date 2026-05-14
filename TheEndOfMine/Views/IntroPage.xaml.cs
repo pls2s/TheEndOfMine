@@ -70,15 +70,22 @@ public partial class IntroPage : ContentPage
     // ฟังก์ชันทำ Fade สลับรูป
     private async Task ChangeCharacterWithFade(Gender newGender)
     {
-        FadeOverlay.InputTransparent = false;
-        await FadeOverlay.FadeTo(1, 300, Easing.CubicIn);
+        var nextSource = GetCharacterImagePath(newGender, "select");
+
+        TransitionImage.Source = nextSource;
+        TransitionImage.Opacity = 0;
+        TransitionImage.IsVisible = true;
+
+        var fadeOutTask = BackgroundImage.FadeTo(0, 220, Easing.CubicIn);
+        var fadeInTask = TransitionImage.FadeTo(1, 220, Easing.CubicOut);
+        await Task.WhenAll(fadeOutTask, fadeInTask);
 
         _selected = newGender;
-        BackgroundImage.Source = GetCharacterImagePath(_selected, "select");
+        BackgroundImage.Source = nextSource;
+        BackgroundImage.Opacity = 1;
 
-        await Task.Delay(100);
-        await FadeOverlay.FadeTo(0, 300, Easing.CubicOut);
-        FadeOverlay.InputTransparent = true;
+        TransitionImage.Opacity = 0;
+        TransitionImage.IsVisible = false;
     }
 
     private async void OnStartClicked(object sender, EventArgs e)
@@ -164,8 +171,11 @@ public partial class IntroPage : ContentPage
             // 4. ไปหน้าเลือกความยาก
             await SetStartLoadingProgressAsync(1, "พร้อมเข้าสู่เหมืองสุดท้าย");
             await Task.Delay(200);
-            await Navigation.PushAsync(new DifficultyPage());
             await HideStartLoadingAsync();
+
+            var difficultyPage = new DifficultyPage { Opacity = 0 };
+            await Navigation.PushAsync(difficultyPage, false);
+            await difficultyPage.FadeTo(1, 220, Easing.CubicOut);
         }
         catch
         {
