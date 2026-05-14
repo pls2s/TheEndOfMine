@@ -433,5 +433,66 @@
             </Border>
         </Grid>
 
+        <!-- ================= 6. Stop / Pause Status Popup ================= -->
+        <Grid x:Name="StopStatusOverlay"
+              IsVisible="False"
+              Opacity="0"
+              BackgroundColor="#99000000"
+              ZIndex="1150">
+            <Border x:Name="StopStatusCard"
+                    WidthRequest="312"
+                    Padding="18"
+                    HorizontalOptions="Center"
+                    VerticalOptions="Center"
+                    BackgroundColor="#F0151310"
+                    Stroke="#D8B45F"
+                    StrokeThickness="1.4"
+                    Scale="0.94">
+                <Border.StrokeShape>
+                    <RoundRectangle CornerRadius="12" />
+                </Border.StrokeShape>
+
+                <VerticalStackLayout Spacing="12">
+                    <Label x:Name="StopStatusTitleLabel"
+                           Text="หยุดเกมแล้ว"
+                           TextColor="#D8B45F"
+                           FontSize="22"
+                           FontAttributes="Bold"
+                           HorizontalTextAlignment="Center" />
+
+                    <Label x:Name="StopStatusDetailLabel"
+                           Text="เกมถูกพักไว้ชั่วคราว"
+                           TextColor="#EFE8D8"
+                           FontSize="14"
+                           LineHeight="1.2"
+                           LineBreakMode="WordWrap"
+                           HorizontalTextAlignment="Center" />
+
+                    <Grid ColumnDefinitions="*,*" ColumnSpacing="10" Margin="0,6,0,0">
+                        <Button x:Name="StopPopupCloseButton"
+                                Text="ปิด"
+                                Clicked="OnStopPopupCloseClicked"
+                                BackgroundColor="#241F19"
+                                BorderColor="#4E493F"
+                                BorderWidth="1"
+                                TextColor="#EFE8D8"
+                                FontAttributes="Bold"
+                                CornerRadius="8"
+                                Padding="14,11" />
+
+                        <Button Grid.Column="1"
+                                x:Name="StopPopupResumeButton"
+                                Text="เล่นต่อ"
+                                Clicked="OnStopPopupResumeClicked"
+                                BackgroundColor="#D8B45F"
+                                TextColor="#111111"
+                                FontAttributes="Bold"
+                                CornerRadius="8"
+                                Padding="14,11" />
+                    </Grid>
+                </VerticalStackLayout>
+            </Border>
+        </Grid>
+
     </Grid>
 </ContentPage>
