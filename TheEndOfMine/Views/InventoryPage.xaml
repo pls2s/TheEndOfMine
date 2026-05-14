@@ -7,17 +7,31 @@
              Shell.NavBarIsVisible="False">
     <Grid>
     <Grid RowDefinitions="Auto,*,Auto" Padding="18,18,18,22" RowSpacing="14">
-        <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
-            <Button Text="‹"
-                    Clicked="OnBackClicked"
+        <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="14">
+            <Border x:Name="BackButton"
                     WidthRequest="44"
                     HeightRequest="44"
-                    BackgroundColor="#191715"
-                    BorderColor="#4E493F"
-                    BorderWidth="1"
-                    TextColor="#EDE3D1"
-                    FontSize="26"
-                    CornerRadius="6" />
+                    BackgroundColor="#151310"
+                    Stroke="#6D5E42"
+                    StrokeThickness="1.2"
+                    VerticalOptions="Center">
+                <Border.StrokeShape>
+                    <RoundRectangle CornerRadius="22" />
+                </Border.StrokeShape>
+                <Border.GestureRecognizers>
+                    <TapGestureRecognizer Tapped="OnBackClicked" />
+                </Border.GestureRecognizers>
+
+                <Grid>
+                    <Label Text="‹"
+                           TextColor="#D8B45F"
+                           FontSize="30"
+                           FontAttributes="Bold"
+                           Margin="0,-3,0,0"
+                           HorizontalOptions="Center"
+                           VerticalOptions="Center" />
+                </Grid>
+            </Border>
 
             <VerticalStackLayout Grid.Column="1" VerticalOptions="Center" Spacing="2">
                 <Label Text="INVENTORY"

@@ -104,6 +104,19 @@ public class GameEngine
         NotifyStateChanged();
     }
 
+    public void ForceStoryEndingForDebug()
+    {
+        if (CurrentState == null) return;
+
+        _gameTimer.Stop();
+        _isEventInProgress = false;
+        _activeEvent = null;
+        ApplyStoryEnding();
+        CurrentState.Status = GameStatus.GameOver;
+        NotifyStateChanged();
+        MainThread.BeginInvokeOnMainThread(() => OnGameOver?.Invoke());
+    }
+
     // ---- Player Actions ----
 
     // ออกสำรวจ → trigger event ถัดไปใน story

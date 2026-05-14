@@ -20,8 +20,8 @@
                     Stroke="#5C503A"
                     StrokeThickness="1"
                     BackgroundColor="#10100E"
-                    WidthRequest="310"
-                    HeightRequest="190">
+                    WidthRequest="360"
+                    HeightRequest="245">
                 <Border.StrokeShape>
                     <RoundRectangle CornerRadius="14" />
                 </Border.StrokeShape>
@@ -41,7 +41,7 @@
                     StrokeThickness="1"
                     BackgroundColor="#141210"
                     Padding="16"
-                    WidthRequest="310">
+                    WidthRequest="360">
                 <Border.StrokeShape>
                     <RoundRectangle CornerRadius="12" />
                 </Border.StrokeShape>
@@ -84,6 +84,7 @@
                     TextColor="#EFE8D8"
                     FontAttributes="Bold"
                     CornerRadius="8"
+                    WidthRequest="360"
                     Padding="16,12" />
         </VerticalStackLayout>
     </Grid>

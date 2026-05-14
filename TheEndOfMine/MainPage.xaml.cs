@@ -364,6 +364,21 @@ public partial class MainPage : ContentPage
         await HideGameMenuAsync();
     }
 
+    private async void OnDebugEndingClicked(object sender, EventArgs e)
+    {
+        AudioFeedbackService.PlayButtonTap();
+        await HideGameMenuAsync();
+        _vm.ForceStoryEndingForDebug();
+    }
+
+    private async void OnDebugTutorialClicked(object sender, EventArgs e)
+    {
+        AudioFeedbackService.PlayButtonTap();
+        await HideGameMenuAsync();
+        Preferences.Remove(TutorialSeenPreferenceKey);
+        await ShowTutorialIfNeededAsync();
+    }
+
     private void UpdateSoundToggleButton()
     {
         SoundToggleButton.Text = AudioFeedbackService.IsMuted ? "SOUND OFF" : "SOUND ON";

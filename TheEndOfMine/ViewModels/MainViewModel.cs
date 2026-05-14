@@ -89,6 +89,11 @@ public class MainViewModel : INotifyPropertyChanged
         _lastAutoSaveUtc = DateTime.UtcNow;
     }
 
+    public void ForceStoryEndingForDebug()
+    {
+        _engine?.ForceStoryEndingForDebug();
+    }
+
     public async Task ToggleStopAsync()
     {
         if (_engine?.CurrentState == null)

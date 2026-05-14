@@ -54,12 +54,55 @@ public class LlmGameContentService
         "กระติกน้ำเก่า",
         "น้ำสะอาดครึ่งขวด",
         "ผ้าพันแผลสะอาด",
+        "น้ำยาฆ่าเชื้อ",
+        "ชุดปฐมพยาบาล",
+        "ขวดยาเก่า",
+        "ชุดเย็บแผล",
         "อาหารกระป๋องบุบ",
         "อาหารแห้งห่อเล็ก",
+        "กระเป๋าเป้",
+        "ผ้าห่มเก่า",
+        "ถุงนอนเก่า",
+        "ถุงมือหนา",
+        "หมวกนิรภัย",
+        "หน้ากากกันฝุ่น",
         "มีดพับขึ้นสนิม",
+        "มีดพร้า",
+        "ปลอกมีด",
         "ไฟฉายมือหมุน",
+        "แบตเตอรี่สำรอง",
+        "แบตเตอรี่วิทยุ",
+        "ไฟแช็ก",
+        "ไม้ขีดไฟ",
+        "คบเพลิง",
         "ยาแก้ปวดเหลือครึ่งแผง",
-        "เชือกขาดครึ่ง"
+        "เชือกขาดครึ่ง",
+        "คีมเก่า",
+        "ไขควง",
+        "ประแจ",
+        "เทปพันสายไฟ",
+        "ชุดสะเดาะกุญแจ",
+        "หม้อสนาม",
+        "เตาพกพา",
+        "ถังน้ำมันเก่า",
+        "เข็มทิศ",
+        "แผนที่เก่า",
+        "กล้องส่องทางไกล",
+        "วิทยุสื่อสาร",
+        "พลุสัญญาณ",
+        "นกหวีด",
+        "เครื่องกรองน้ำ"
+    ];
+
+    private static readonly string[] CommonFallbackRewardNames =
+    [
+        "น้ำกรองขวดเล็ก",
+        "น้ำดื่มขวดเล็ก",
+        "กระติกน้ำเก่า",
+        "อาหารกระป๋องบุบ",
+        "อาหารแห้งห่อเล็ก",
+        "ผ้าพันแผลสะอาด",
+        "ยาแก้ปวดเหลือครึ่งแผง"
     ];
 
     private static readonly HttpClient HttpClient = new()
@@ -288,6 +331,7 @@ public class LlmGameContentService
             : BuildStateSummary(state);
         var storyMemory = BuildStoryMemoryForPrompt(state);
         var inventoryRules = BuildInventoryUseRules(state);
+        var resourcePressureRule = BuildResourcePressureRule(state);
         var startingItemsRule = chapterNumber == 1
             ? "- สร้าง startingItems 3 ชิ้น"
             : "- startingItems ต้องเป็น array ว่าง [] เพราะไม่ใช่ chapter แรก";
@@ -327,6 +371,7 @@ public class LlmGameContentService
         - เกมมีระบบ Noise และ Infection แม้ schema ไม่มี field ตรง ๆ: ตัวเลือกที่ยิงปืน ทุบ งัด พัง กระจกแตก หรือตะโกนจะเพิ่ม Noise, ตัวเลือกที่โดนกัด แผลสกปรก เลือด สนิม ศพ น้ำเน่า หรือซากเน่าจะเพิ่ม Infection
         - ถ้าผู้เล่น Noise สูง ให้เขียน event ที่ศัตรู/อันตรายถูกดึงดูดจากเสียงอย่างสมเหตุผล
         - ถ้าผู้เล่น Infection สูง ให้เขียนอาการเช่นหนาวสั่น ไข้ แผลบวม มือสั่น หรือการตัดสินใจที่ยากขึ้น
+        {{resourcePressureRule}}
         - ตัวเลือกที่ใช้ยา ทำแผล พันแผล หรือปฐมพยาบาลต้องลดความเสี่ยงติดเชื้อใน resultText และห้ามรักษาหายทันทีแบบเวทมนตร์
         - ใส่ itemRewards รวมทั้ง chapter อย่างน้อย 10 ชิ้น โดย itemRewards เป็น array ของ item object ครบถ้วน และ 1 choice ให้ได้ 1-3 ชิ้นได้ตามบริบท
         - ทุก itemRewards, itemReward และ startingItems ต้องมี story_alias ที่เลือกจากรายการ item.story_alias ด้านบน
@@ -458,6 +503,21 @@ public class LlmGameContentService
         });
 
         return string.Join("\n", lines);
+    }
+
+    private static string BuildResourcePressureRule(GameState? state)
+    {
+        if (state == null)
+            return "- ถ้าตัวเลือกพบเสบียง ควรมีน้ำดื่มอย่างน้อยบางจุดเพื่อให้การเอาตัวรอดสมดุล";
+
+        var thirst = state.Survivor.Thirst;
+        if (thirst <= 25f)
+            return "- ค่าน้ำของผู้เล่นใกล้หมดมาก: chapter นี้ต้องเพิ่มโอกาสเจอน้ำชัดเจน ให้หลาย choice มี itemRewards ประเภท Water เช่น ขวดน้ำ กระติกน้ำ หรือน้ำกรอง โดยยังต้องเข้ากับฉาก";
+
+        if (thirst <= 40f)
+            return "- ค่าน้ำของผู้เล่นเริ่มต่ำ: chapter นี้ควรมี choice ที่ให้ itemRewards ประเภท Water มากกว่าปกติ เช่น ขวดน้ำหรือน้ำกรอง";
+
+        return "- ถ้าทรัพยากรน้ำไม่ได้วิกฤต ให้กระจายน้ำ อาหาร และของใช้ให้สมดุลกับความเสี่ยงของเหตุการณ์";
     }
 
     private static string DescribeReasonableItemUse(Item item)
@@ -632,6 +692,14 @@ public class LlmGameContentService
                     }
                 }
 
+                if (GetRewardCount(choice) == 0 && TryCreateMentionedReward(choice, $"mentioned_{i + 1}_{c + 1}", out var mentionedReward))
+                {
+                    AddReward(choice, mentionedReward);
+                    NormalizeItem(mentionedReward, $"mentioned_{i + 1}_{c + 1}", assetCatalog);
+                    ItemRewardConsistencyService.Normalize(mentionedReward);
+                    rewardCount++;
+                }
+
                 ItemRewardConsistencyService.Normalize(choice);
 
                 if (choice.HpEffect > 0 && !AllowsPositiveHpRecovery(choice))
@@ -647,7 +715,7 @@ public class LlmGameContentService
         }
 
         EnsureMinimumItemRewards(content, assetCatalog, rewardCount, Math.Min(14, Math.Max(10, eventsPerChapter * 2)));
-        EnsureBalancedResourceRewards(content, assetCatalog, eventsPerChapter);
+        EnsureBalancedResourceRewards(content, assetCatalog, eventsPerChapter, state);
     }
 
     private static float ClampEffect(float value) => Math.Clamp(value, -30f, 30f);
@@ -660,6 +728,58 @@ public class LlmGameContentService
             choice.ItemReward = item;
         else
             choice.ItemRewards.Add(item);
+    }
+
+    private static string PickFallbackRewardName(int rewardCount)
+    {
+        if (rewardCount < 4)
+            return CommonFallbackRewardNames[Random.Shared.Next(CommonFallbackRewardNames.Length)];
+
+        return FallbackRewardNames[Random.Shared.Next(FallbackRewardNames.Length)];
+    }
+
+    private static bool TryCreateMentionedReward(EventChoice choice, string fallbackId, out Item item)
+    {
+        item = null!;
+        var text = $"{choice.Text} {choice.ResultText}";
+        if (!ContainsAny(text, "ได้รับ", "เก็บ", "หยิบ", "พบ", "เจอ", "ใส่กระเป๋า", "ใส่เป้"))
+            return false;
+
+        var name = InferMentionedRewardName(text);
+        if (string.IsNullOrWhiteSpace(name))
+            return false;
+
+        item = CreateFallbackItem(name, fallbackId);
+        return true;
+    }
+
+    private static string? InferMentionedRewardName(string text)
+    {
+        if (ContainsAny(text, "ขวดน้ำ", "น้ำดื่ม", "น้ำสะอาด", "น้ำกรอง", "กระติกน้ำ"))
+            return "น้ำกรองขวดเล็ก";
+        if (ContainsAny(text, "อาหารกระป๋อง", "อาหารแห้ง", "เสบียง", "อาหาร"))
+            return "อาหารกระป๋องบุบ";
+        if (ContainsAny(text, "ผ้าพันแผล", "ผ้าก๊อซ"))
+            return "ผ้าพันแผลสะอาด";
+        if (ContainsAny(text, "ยาแก้ปวด", "ยาเม็ด", "ขวดยา", "ยา"))
+            return "ยาแก้ปวดเหลือครึ่งแผง";
+        if (ContainsAny(text, "ผ้าห่ม", "blanket"))
+            return "ผ้าห่มเก่า";
+        if (ContainsAny(text, "ไฟฉาย", "flashlight"))
+            return "ไฟฉายมือหมุน";
+        if (ContainsAny(text, "มีดพับ", "มีด"))
+            return "มีดพับขึ้นสนิม";
+        if (ContainsAny(text, "เชือก", "rope"))
+            return "เชือกขาดครึ่ง";
+        if (ContainsAny(text, "กระเป๋าเป้", "backpack"))
+            return "กระเป๋าเป้";
+
+        return null;
+    }
+
+    private static bool ContainsAny(string text, params string[] tokens)
+    {
+        return tokens.Any(token => text.Contains(token, StringComparison.OrdinalIgnoreCase));
     }
 
     private void EnsureMinimumItemRewards(
@@ -682,7 +802,7 @@ public class LlmGameContentService
                 if (GetRewardCount(choice) >= 3)
                     continue;
 
-                var fallbackName = FallbackRewardNames[Random.Shared.Next(FallbackRewardNames.Length)];
+                var fallbackName = PickFallbackRewardName(rewardCount);
                 var item = CreateFallbackItem(fallbackName, $"bonus_{rewardCount + 1}_{gameEvent.Id}_{choice.Id}");
                 AddReward(choice, item);
                 NormalizeItem(item, $"bonus_{rewardCount + 1}_{gameEvent.Id}_{choice.Id}", assetCatalog);
@@ -695,13 +815,28 @@ public class LlmGameContentService
     private void EnsureBalancedResourceRewards(
         GeneratedGameContent content,
         StoryAssetCatalog assetCatalog,
-        int eventsPerChapter)
+        int eventsPerChapter,
+        GameState? state)
     {
         var targetFood = Math.Max(3, eventsPerChapter);
-        var targetWater = Math.Max(5, eventsPerChapter + 1);
+        var targetWater = GetWaterRewardTarget(eventsPerChapter, state);
 
         EnsureResourceReward(content, assetCatalog, "Food", targetFood, "อาหารกระป๋องบุบ");
         EnsureResourceReward(content, assetCatalog, "Water", targetWater, "น้ำกรองขวดเล็ก");
+    }
+
+    private static int GetWaterRewardTarget(int eventsPerChapter, GameState? state)
+    {
+        var baseTarget = Math.Max(5, eventsPerChapter + 1);
+        if (state == null)
+            return baseTarget;
+
+        return state.Survivor.Thirst switch
+        {
+            <= 25f => baseTarget + 4,
+            <= 40f => baseTarget + 2,
+            _ => baseTarget
+        };
     }
 
     private void EnsureResourceReward(
@@ -1099,7 +1234,6 @@ public class LlmGameContentService
             4 => new[] { "จุดตรวจทหารร้าง", "ถนนไป safe zone", "สะพานข้ามคลอง", "ค่ายผู้รอดชีวิต", "คลังเสบียง", "ทางเข้าเขตกักกัน", "ลานจอดเฮลิคอปเตอร์", "ประตูเมืองด้านเหนือ" },
             _ => new[] { "ถนนเปลี่ยว", "อาคารร้าง", "ซอยมืด", "ดาดฟ้า", "อุโมงค์", "ลานจอดรถ", "คลินิกเก่า", "ทางออกเมือง" }
         };
-        var itemNames = new[] { "น้ำกรองขวดเล็ก", "ผ้าพันแผลสะอาด", "มีดพับขึ้นสนิม", "อาหารกระป๋องบุบ", "ไฟฉายมือหมุน", "ยาแก้ปวดเหลือครึ่งแผง" };
         var previousThread = state?.StoryMemory?.LastOrDefault()?.Summary;
         var openingThread = string.IsNullOrWhiteSpace(previousThread)
             ? $"เป้าหมายตอนนี้คือ{objective}"
@@ -1134,7 +1268,7 @@ public class LlmGameContentService
                         FatigueEffect = Random.Shared.Next(8, 24),
                         ResultText = $"คุณฝ่าเข้าไปจนพบเบาะแสเพิ่มเกี่ยวกับ{objective} แต่เสียงของ{recurringThreat}ดังใกล้ขึ้น. {nextLead}",
                         ItemReward = i < Math.Min(6, eventsPerChapter)
-                            ? CreateFallbackItem(itemNames[Random.Shared.Next(itemNames.Length)], $"reward_{seed}_{i}")
+                            ? CreateFallbackItem(PickFallbackRewardName(i), $"reward_{seed}_{i}")
                             : null
                     },
                     new()

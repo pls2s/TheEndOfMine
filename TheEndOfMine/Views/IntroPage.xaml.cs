@@ -154,6 +154,7 @@ public partial class IntroPage : ContentPage
             // 3. บันทึกข้อมูลรอบใหม่ลง GameDatabase
             await SetStartLoadingProgressAsync(0.9, "กำลังบันทึกเกม");
             new SaveService().DeleteAllSaves();
+            Preferences.Remove("main_tutorial_seen");
             var db = new TheEndOfMine.Data.GameDatabase();
             await db.SaveAsync(survivor, state, inv);
 
