@@ -21,16 +21,18 @@ public class Inventory
         EnsureCapacityMatchesSlots();
 
         var carryBonusSlots = GetCarryCapacityBonusSlots(item);
-        if (IsFull && carryBonusSlots > 0)
+        if (carryBonusSlots > 0)
+        {
             ExpandRowsForCapacityBonus(carryBonusSlots);
-        else if (IsFull && expandIfFull)
+            return true;
+        }
+
+        if (IsFull && expandIfFull)
             ExpandRow();
 
         int index = Slots.IndexOf(null);
         if (index == -1) return false;
         Slots[index] = item;
-        if (carryBonusSlots > 0)
-            ExpandRowsForCapacityBonus(carryBonusSlots);
         return true;
     }
 
@@ -66,10 +68,25 @@ public class Inventory
     {
         EnsureCapacityMatchesSlots();
 
-        var bonusSlots = GetItems().Sum(GetCarryCapacityBonusSlots);
+        var capacityItems = GetItems()
+            .Where(item => GetCarryCapacityBonusSlots(item) > 0)
+            .ToList();
+        var bonusSlots = capacityItems.Sum(GetCarryCapacityBonusSlots);
         var requiredRows = 4 + (int)Math.Ceiling(bonusSlots / (double)Columns);
         while (Rows < requiredRows)
             ExpandRow();
+
+        if (capacityItems.Count == 0)
+            return;
+
+        foreach (var item in capacityItems)
+        {
+            var index = Slots.IndexOf(item);
+            if (index >= 0)
+                Slots[index] = null;
+        }
+
+        CompactSlots();
     }
 
     public IEnumerable<Item> GetItems() => Slots.Where(s => s != null)!;

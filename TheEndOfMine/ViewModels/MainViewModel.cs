@@ -404,8 +404,6 @@ public class MainViewModel : INotifyPropertyChanged
         InfectionProgress = gs.Infection / 100.0;
         SurvivalPressureDisplay = $"เสียง {gs.Noise:0}%  |  ติดเชื้อ {gs.Infection:0}%";
         DayTimeDisplay = gs.TimeDisplay;
-
-        // 🚨 2. ลบคำว่า male/ และ female/ ออกจาก Path รูปภาพ (ถ้าคุณย้ายไฟล์ออกมารวมกันแล้ว) 🚨
         SurvivorImage = s.Gender == Gender.Male ? "portrait_male.png" : "portrait_female.png";
         BackgroundImage = s.Gender == Gender.Male ? "main_page_male.gif" : "main_page_female.gif";
 
@@ -452,6 +450,7 @@ public class MainViewModel : INotifyPropertyChanged
     {
         return state?.Status == GameStatus.Running
             && state.GeneratedEvents.Count > 0
+            && state.GeneratedEvents.Count >= state.EventsPerChapter
             && state.EventIndex >= state.GeneratedEvents.Count
             && state.CurrentChapter < state.MaxChapters;
     }
