@@ -10,13 +10,16 @@ namespace TheEndOfMine.Views;
 public partial class IntroPage : ContentPage
 {
     private Gender _selected = Gender.Female; // เริ่มต้นที่ผู้หญิง
+    private readonly LightningStrikeDrawable _lightningDrawable = new();
     private bool _isStarting;
+    private bool _isChangingCharacter;
     private TaskCompletionSource<bool>? _alertCompletion;
     private CancellationTokenSource? _startLoadingPulseCts;
 
     public IntroPage()
     {
         InitializeComponent();
+        LightningCanvas.Drawable = _lightningDrawable;
         StartBlinkingAnimation();
 
         // โหลดรูปผู้หญิงรอไว้หลังม่าน
@@ -55,7 +58,7 @@ public partial class IntroPage : ContentPage
     // ฟังก์ชันคลิกเลือกตัวละครชาย
     private async void OnMaleClicked(object sender, EventArgs e)
     {
-        if (_selected == Gender.Male) return;
+        if (_selected == Gender.Male || _isChangingCharacter) return;
         AudioFeedbackService.PlayButtonTap();
         await ChangeCharacterWithFade(Gender.Male);
     }
@@ -63,7 +66,7 @@ public partial class IntroPage : ContentPage
     // ฟังก์ชันคลิกเลือกตัวละครหญิง
     private async void OnFemaleClicked(object sender, EventArgs e)
     {
-        if (_selected == Gender.Female) return;
+        if (_selected == Gender.Female || _isChangingCharacter) return;
         AudioFeedbackService.PlayButtonTap();
         await ChangeCharacterWithFade(Gender.Female);
     }
@@ -71,22 +74,58 @@ public partial class IntroPage : ContentPage
     // ฟังก์ชันทำ Fade สลับรูป
     private async Task ChangeCharacterWithFade(Gender newGender)
     {
-        var nextSource = GetCharacterImagePath(newGender, "select");
+        _isChangingCharacter = true;
+        try
+        {
+            var nextSource = GetCharacterImagePath(newGender, "select");
 
-        TransitionImage.Source = nextSource;
-        TransitionImage.Opacity = 0;
-        TransitionImage.IsVisible = true;
+            TransitionImage.Source = nextSource;
+            TransitionImage.Opacity = 0;
+            TransitionImage.IsVisible = true;
 
-        var fadeOutTask = BackgroundImage.FadeTo(0, 220, Easing.CubicIn);
-        var fadeInTask = TransitionImage.FadeTo(1, 220, Easing.CubicOut);
-        await Task.WhenAll(fadeOutTask, fadeInTask);
+            var lightningTask = PlayLightningStrikeAsync(newGender);
+            var fadeOutTask = BackgroundImage.FadeTo(0, 220, Easing.CubicIn);
+            var fadeInTask = TransitionImage.FadeTo(1, 220, Easing.CubicOut);
+            await Task.WhenAll(fadeOutTask, fadeInTask, lightningTask);
 
-        _selected = newGender;
-        BackgroundImage.Source = nextSource;
-        BackgroundImage.Opacity = 1;
+            _selected = newGender;
+            BackgroundImage.Source = nextSource;
+            BackgroundImage.Opacity = 1;
 
-        TransitionImage.Opacity = 0;
-        TransitionImage.IsVisible = false;
+            TransitionImage.Opacity = 0;
+            TransitionImage.IsVisible = false;
+        }
+        finally
+        {
+            _isChangingCharacter = false;
+        }
+    }
+
+    private async Task PlayLightningStrikeAsync(Gender newGender)
+    {
+        _lightningDrawable.TargetX = newGender == Gender.Male ? 0.34f : 0.66f;
+        _lightningDrawable.Regenerate();
+        LightningCanvas.Invalidate();
+
+        LightningOverlay.Opacity = 1;
+        LightningFlash.Opacity = 0;
+
+        await Task.WhenAll(
+            LightningFlash.FadeTo(0.48, 45, Easing.CubicOut),
+            LightningCanvas.FadeTo(1, 45, Easing.CubicOut));
+
+        await Task.Delay(45);
+        _lightningDrawable.Regenerate(branchOnly: true);
+        LightningCanvas.Invalidate();
+
+        await LightningFlash.FadeTo(0.1, 70, Easing.CubicIn);
+        await Task.Delay(55);
+        await Task.WhenAll(
+            LightningFlash.FadeTo(0, 130, Easing.CubicIn),
+            LightningOverlay.FadeTo(0, 170, Easing.CubicIn));
+
+        LightningFlash.Opacity = 0;
+        LightningOverlay.Opacity = 0;
     }
 
     private async void OnStartClicked(object sender, EventArgs e)
@@ -369,5 +408,95 @@ public partial class IntroPage : ContentPage
             "confirm" => $"{folder}/{prefix}_confirm_button.png",
             _ => $"{folder}/{prefix}_select_char.png"
         };
+    }
+
+    private sealed class LightningStrikeDrawable : IDrawable
+    {
+        private readonly Random _random = new();
+        private readonly List<PointF> _mainBolt = new();
+        private readonly List<(PointF From, PointF To)> _branches = new();
+
+        public float TargetX { get; set; } = 0.5f;
+
+        public void Regenerate(bool branchOnly = false)
+        {
+            if (!branchOnly || _mainBolt.Count == 0)
+            {
+                _mainBolt.Clear();
+                var x = TargetX + RandomRange(-0.05f, 0.05f);
+                var y = 0.05f;
+                _mainBolt.Add(new PointF(x, y));
+
+                for (var i = 1; i <= 7; i++)
+                {
+                    var progress = i / 7f;
+                    x += RandomRange(-0.07f, 0.07f);
+                    y = 0.05f + progress * 0.5f;
+                    _mainBolt.Add(new PointF(Math.Clamp(x, 0.12f, 0.88f), y));
+                }
+            }
+
+            _branches.Clear();
+            foreach (var point in _mainBolt.Skip(1).Take(4))
+            {
+                var direction = _random.Next(0, 2) == 0 ? -1 : 1;
+                var end = new PointF(
+                    Math.Clamp(point.X + direction * RandomRange(0.07f, 0.16f), 0.05f, 0.95f),
+                    Math.Clamp(point.Y + RandomRange(0.03f, 0.12f), 0.05f, 0.68f));
+                _branches.Add((point, end));
+            }
+        }
+
+        public void Draw(ICanvas canvas, RectF dirtyRect)
+        {
+            if (_mainBolt.Count < 2)
+                Regenerate();
+
+            canvas.SaveState();
+            canvas.Alpha = 0.88f;
+
+            DrawBolt(canvas, dirtyRect, _mainBolt, Color.FromArgb("#E8FBFF"), 5.5f);
+            DrawBolt(canvas, dirtyRect, _mainBolt, Color.FromArgb("#77D7FF"), 10f, 0.35f);
+
+            foreach (var (from, to) in _branches)
+            {
+                var branch = new List<PointF> { from, MidPoint(from, to), to };
+                DrawBolt(canvas, dirtyRect, branch, Color.FromArgb("#BDEFFF"), 2.8f, 0.78f);
+            }
+
+            canvas.RestoreState();
+        }
+
+        private void DrawBolt(ICanvas canvas, RectF bounds, IReadOnlyList<PointF> points, Color color, float strokeSize, float alpha = 1f)
+        {
+            canvas.StrokeColor = color;
+            canvas.StrokeSize = strokeSize;
+            canvas.StrokeLineCap = LineCap.Round;
+            canvas.Alpha = alpha;
+
+            for (var i = 1; i < points.Count; i++)
+            {
+                var a = ToCanvasPoint(points[i - 1], bounds);
+                var b = ToCanvasPoint(points[i], bounds);
+                canvas.DrawLine(a.X, a.Y, b.X, b.Y);
+            }
+        }
+
+        private PointF ToCanvasPoint(PointF point, RectF bounds)
+        {
+            return new PointF(bounds.X + point.X * bounds.Width, bounds.Y + point.Y * bounds.Height);
+        }
+
+        private PointF MidPoint(PointF from, PointF to)
+        {
+            return new PointF(
+                (from.X + to.X) / 2f + RandomRange(-0.025f, 0.025f),
+                (from.Y + to.Y) / 2f + RandomRange(-0.025f, 0.025f));
+        }
+
+        private float RandomRange(float min, float max)
+        {
+            return min + (float)_random.NextDouble() * (max - min);
+        }
     }
 }

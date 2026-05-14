@@ -203,6 +203,7 @@ public static class ItemRewardConsistencyService
     private static void ApplyProfileEffects(Item item, string alias)
     {
         item.Effects ??= new ItemEffects();
+        ResetProfileLockedEffects(item.Effects);
 
         switch (alias)
         {
@@ -237,6 +238,18 @@ public static class ItemRewardConsistencyService
                 item.Durability ??= item.DurabilityMax;
                 return;
         }
+    }
+
+    private static void ResetProfileLockedEffects(ItemEffects effects)
+    {
+        effects.HpRestore = 0;
+        effects.HungerRestore = 0;
+        effects.ThirstRestore = 0;
+        effects.FatigueRestore = 0;
+        effects.BiteInfectionReduce = 0;
+        effects.OneTimeUse = false;
+        effects.CarryCapacityBonus = 0;
+        effects.IsContainer = false;
     }
 
     private static void EnsureResultMentionsReward(EventChoice choice)

@@ -346,6 +346,7 @@ public class MainViewModel : INotifyPropertyChanged
         if (_engine == null || IsActionBusy) return;
 
         var isChapterTransition = IsNextChapterTransition(_engine.CurrentState);
+        var isChapterContinuationLoad = IsCurrentChapterContinuationLoad(_engine.CurrentState);
         IsActionBusy = true;
         try
         {
@@ -353,6 +354,18 @@ public class MainViewModel : INotifyPropertyChanged
             {
                 await ShowChapterLoadingAsync(_engine.CurrentState!);
                 StartChapterLoadingPulse();
+            }
+            else if (isChapterContinuationLoad)
+            {
+                await ShowChapterContinuationLoadingAsync(_engine.CurrentState!);
+                StartChapterLoadingPulse(
+                [
+                    "กำลังต่อเหตุการณ์จาก chapter เดิม",
+                    "กำลังรักษาเป้าหมายและบรรยากาศเดิม",
+                    "กำลังตรวจไอเทมที่ผู้เล่นมีอยู่ตอนนี้",
+                    "กำลังสร้างทางเลือกถัดไปให้ต่อเนื่อง",
+                    "กำลังเตรียม event ถัดไป"
+                ]);
             }
 
             await _engine.GoOutsideAsync();
@@ -364,10 +377,15 @@ public class MainViewModel : INotifyPropertyChanged
                 StopChapterLoadingPulse();
                 await CompleteChapterLoadingAsync(_engine.CurrentState);
             }
+            else if (isChapterContinuationLoad)
+            {
+                StopChapterLoadingPulse();
+                await CompleteChapterContinuationLoadingAsync(_engine.CurrentState);
+            }
         }
         finally
         {
-            if (isChapterTransition)
+            if (isChapterTransition || isChapterContinuationLoad)
             {
                 StopChapterLoadingPulse();
                 await HideChapterLoadingAsync();
@@ -455,6 +473,14 @@ public class MainViewModel : INotifyPropertyChanged
             && state.CurrentChapter < state.MaxChapters;
     }
 
+    private static bool IsCurrentChapterContinuationLoad(GameState? state)
+    {
+        return state?.Status == GameStatus.Running
+            && state.GeneratedEvents.Count > 0
+            && state.GeneratedEvents.Count < state.EventsPerChapter
+            && state.EventIndex >= state.GeneratedEvents.Count;
+    }
+
     private async Task ShowChapterLoadingAsync(GameState state)
     {
         ChapterLoadingTitle = $"ENTERING CHAPTER {state.CurrentChapter + 1}";
@@ -467,6 +493,20 @@ public class MainViewModel : INotifyPropertyChanged
 
         await SetChapterLoadingProgressAsync(0.16, "กำลังสรุปผลจาก chapter ก่อนหน้า");
         await SetChapterLoadingProgressAsync(0.31, "กำลังสร้างเหตุการณ์ชุดใหม่");
+    }
+
+    private async Task ShowChapterContinuationLoadingAsync(GameState state)
+    {
+        ChapterLoadingTitle = $"CHAPTER {state.CurrentChapter}";
+        ChapterLoadingDetail = "กำลังต่อเหตุการณ์ถัดไป";
+        ChapterLoadingImage = string.IsNullOrWhiteSpace(state.CurrentChapterImagePath)
+            ? "story/chapter/chapter_ruined_city_sunset.png"
+            : state.CurrentChapterImagePath;
+        ChapterLoadingProgress = 0;
+        IsChapterLoading = true;
+
+        await SetChapterLoadingProgressAsync(0.18, "กำลังเชื่อมเรื่องจาก event ก่อนหน้า");
+        await SetChapterLoadingProgressAsync(0.34, "กำลังสร้างเหตุการณ์ต่อใน chapter เดิม");
     }
 
     private async Task CompleteChapterLoadingAsync(GameState? state)
@@ -487,7 +527,25 @@ public class MainViewModel : INotifyPropertyChanged
         await Task.Delay(220);
     }
 
-    private void StartChapterLoadingPulse()
+    private async Task CompleteChapterContinuationLoadingAsync(GameState? state)
+    {
+        if (state != null)
+        {
+            ChapterLoadingTitle = $"CHAPTER {state.CurrentChapter}";
+            ChapterLoadingDetail = string.IsNullOrWhiteSpace(state.CurrentChapterTitle)
+                ? "เหตุการณ์ถัดไปพร้อมแล้ว"
+                : state.CurrentChapterTitle;
+
+            if (!string.IsNullOrWhiteSpace(state.CurrentChapterImagePath))
+                ChapterLoadingImage = state.CurrentChapterImagePath;
+        }
+
+        await SetChapterLoadingProgressAsync(0.84, "กำลังจัดลำดับเหตุการณ์");
+        await SetChapterLoadingProgressAsync(1, "พร้อมไปต่อ");
+        await Task.Delay(180);
+    }
+
+    private void StartChapterLoadingPulse(IReadOnlyList<string>? details = null)
     {
         StopChapterLoadingPulse();
 
@@ -496,7 +554,7 @@ public class MainViewModel : INotifyPropertyChanged
 
         _ = Task.Run(async () =>
         {
-            var details = new[]
+            details ??= new[]
             {
                 "กำลังเขียนเหตุการณ์ให้ต่อเนื่องกับเรื่องเดิม",
                 "กำลังตรวจไอเทมและผลลัพธ์ของแต่ละทางเลือก",
@@ -516,7 +574,7 @@ public class MainViewModel : INotifyPropertyChanged
                         ChapterLoadingProgress = Math.Min(0.88, ChapterLoadingProgress + step);
                     }
 
-                    ChapterLoadingDetail = details[index % details.Length];
+                    ChapterLoadingDetail = details[index % details.Count];
                 });
 
                 index++;
