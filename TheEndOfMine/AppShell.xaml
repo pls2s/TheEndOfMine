@@ -7,7 +7,8 @@
     xmlns:local="clr-namespace:TheEndOfMine"
     Title="TheEndOfMine">
 
-    <!-- Start with IntroPage as the initial page -->
+    <!-- Start with SplashPage; auto-navigates to IntroPage -->
+    <ShellContent Title="Splash" ContentTemplate="{DataTemplate views:SplashPage}" Route="splash" />
     <ShellContent Title="Intro" ContentTemplate="{DataTemplate views:IntroPage}" Route="intro" />
     <ShellContent Title="Difficulty" ContentTemplate="{DataTemplate views:DifficultyPage}" Route="difficulty" />
     <ShellContent Title="Main" ContentTemplate="{DataTemplate local:MainPage}" Route="MainPage" />

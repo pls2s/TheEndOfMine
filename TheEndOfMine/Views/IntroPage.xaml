@@ -55,10 +55,11 @@
 
         <!-- 2. หน้าปก Loading -->
         <Grid x:Name="TitleLayer" BackgroundColor="Black">
-            <WebView x:Name="SplashWebView"
-                     HorizontalOptions="Fill"
-                     VerticalOptions="Fill"
-                     InputTransparent="True" />
+            <Image Source="splash_page.png"
+                   Aspect="AspectFill"
+                   HorizontalOptions="Fill"
+                   VerticalOptions="Fill"
+                   InputTransparent="True" />
             <BoxView InputTransparent="True">
                 <BoxView.Background>
                     <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
