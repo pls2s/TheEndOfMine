@@ -24,13 +24,16 @@ public static class EventChoiceInventoryGuard
     public static void Normalize(GameEvent gameEvent, Inventory? inventory)
     {
         var items = inventory?.GetItems().ToList() ?? [];
+        NormalizeAvailableItems(items);
         foreach (var choice in gameEvent.Choices)
             Normalize(choice, items);
     }
 
     public static void Normalize(EventChoice choice, Inventory? inventory)
     {
-        Normalize(choice, inventory?.GetItems().ToList() ?? []);
+        var items = inventory?.GetItems().ToList() ?? [];
+        NormalizeAvailableItems(items);
+        Normalize(choice, items);
     }
 
     public static void Normalize(EventChoice choice, IReadOnlyCollection<Item> availableItems)
@@ -103,6 +106,12 @@ public static class EventChoiceInventoryGuard
         }
 
         return true;
+    }
+
+    private static void NormalizeAvailableItems(IEnumerable<Item> items)
+    {
+        foreach (var item in items)
+            ItemRewardConsistencyService.Normalize(item);
     }
 
     private static Item? NormalizeExplicitItemId(string itemId, IReadOnlyCollection<Item> availableItems)

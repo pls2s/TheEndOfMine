@@ -41,6 +41,9 @@ public partial class InventoryPage : ContentPage
 
         _state = state;
         _inventory = inventory;
+        foreach (var item in _inventory.GetItems().ToList())
+            ItemRewardConsistencyService.Normalize(item);
+
         _inventory.ApplyContainerCapacityBonuses();
         if (_state != null)
             _state.Survivor.Inventory = _inventory;

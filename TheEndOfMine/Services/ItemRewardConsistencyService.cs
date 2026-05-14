@@ -203,40 +203,60 @@ public static class ItemRewardConsistencyService
     private static void ApplyProfileEffects(Item item, string alias)
     {
         item.Effects ??= new ItemEffects();
+        var effects = item.Effects;
+        var hpRestore = effects.HpRestore.GetValueOrDefault();
+        var hungerRestore = effects.HungerRestore.GetValueOrDefault();
+        var thirstRestore = effects.ThirstRestore.GetValueOrDefault();
+        var infectionReduce = effects.BiteInfectionReduce.GetValueOrDefault();
+        var carryCapacityBonus = effects.CarryCapacityBonus.GetValueOrDefault();
+
+        ResetProfileLockedEffects(effects);
 
         switch (alias)
         {
             case "canned_food":
-                item.Effects.HungerRestore = Math.Max(34f, item.Effects.HungerRestore.GetValueOrDefault());
-                item.Effects.OneTimeUse = true;
+                effects.HungerRestore = Math.Max(34f, hungerRestore);
+                effects.OneTimeUse = true;
                 return;
             case "water_bottle":
             case "canteen":
-                item.Effects.ThirstRestore = Math.Max(38f, item.Effects.ThirstRestore.GetValueOrDefault());
-                item.Effects.OneTimeUse = true;
+                effects.ThirstRestore = Math.Max(38f, thirstRestore);
+                effects.OneTimeUse = true;
                 return;
             case "first_aid_kit":
-                item.Effects.HpRestore = Math.Max(24f, item.Effects.HpRestore.GetValueOrDefault());
-                item.Effects.BiteInfectionReduce = Math.Max(10f, item.Effects.BiteInfectionReduce.GetValueOrDefault());
-                item.Effects.OneTimeUse = true;
+                effects.HpRestore = Math.Max(24f, hpRestore);
+                effects.BiteInfectionReduce = Math.Max(10f, infectionReduce);
+                effects.OneTimeUse = true;
                 return;
             case "bandage":
             case "antiseptic":
             case "medicine_bottle":
             case "painkillers":
             case "sewing_kit":
-                item.Effects.HpRestore = Math.Max(16f, item.Effects.HpRestore.GetValueOrDefault());
-                item.Effects.BiteInfectionReduce = Math.Max(6f, item.Effects.BiteInfectionReduce.GetValueOrDefault());
-                item.Effects.OneTimeUse = true;
+                effects.HpRestore = Math.Max(16f, hpRestore);
+                effects.BiteInfectionReduce = Math.Max(6f, infectionReduce);
+                effects.OneTimeUse = true;
                 return;
             case "backpack":
-                item.Effects.IsContainer = true;
-                item.Effects.CarryCapacityBonus = Math.Max(4f, item.Effects.CarryCapacityBonus.GetValueOrDefault());
+                effects.IsContainer = true;
+                effects.CarryCapacityBonus = Math.Max(4f, carryCapacityBonus);
                 item.WeightKg = item.WeightKg <= 0 ? 1.1f : item.WeightKg;
                 item.DurabilityMax ??= 1;
                 item.Durability ??= item.DurabilityMax;
                 return;
         }
+    }
+
+    private static void ResetProfileLockedEffects(ItemEffects effects)
+    {
+        effects.HpRestore = 0;
+        effects.HungerRestore = 0;
+        effects.ThirstRestore = 0;
+        effects.FatigueRestore = 0;
+        effects.BiteInfectionReduce = 0;
+        effects.OneTimeUse = false;
+        effects.CarryCapacityBonus = 0;
+        effects.IsContainer = false;
     }
 
     private static void EnsureResultMentionsReward(EventChoice choice)
