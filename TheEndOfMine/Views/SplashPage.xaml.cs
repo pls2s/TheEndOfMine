@@ -11,10 +11,35 @@ public partial class SplashPage : ContentPage
 
     protected override async void OnAppearing()
     {
-        base.OnAppearing();
+        try
+        {
+            base.OnAppearing();
 
-        await Task.Delay(3000);
+            await Task.Delay(3000);
 
-        await Shell.Current.GoToAsync("//intro");
+            if (Application.Current?.Windows.FirstOrDefault()?.Page is Shell)
+            {
+                await Shell.Current.GoToAsync("//intro");
+                return;
+            }
+
+            await Navigation.PushAsync(new IntroPage(), false);
+        }
+        catch (Exception ex)
+        {
+            App.LogStartupException("SplashPage.OnAppearing", ex);
+
+            try
+            {
+                var window = Application.Current?.Windows.FirstOrDefault();
+                if (window != null)
+                    window.Page = new NavigationPage(new IntroPage());
+            }
+            catch (Exception nestedEx)
+            {
+                App.LogStartupException("SplashPage.Recover", nestedEx);
+                // Keep the splash visible rather than crashing on startup.
+            }
+        }
     }
 }

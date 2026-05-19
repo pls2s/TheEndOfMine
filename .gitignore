@@ -10,6 +10,7 @@ obj/
 # Build results
 [Dd]ebug/
 [Rr]elease/
+*.zip
 x64/
 x86/
 [Ww][Ii][Nn]32/

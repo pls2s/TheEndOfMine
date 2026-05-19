@@ -9,11 +9,13 @@
     <!-- Outermost Grid (ไม่มี Padding) -->
     <Grid>
 
-        <!-- ================= 1. เลเยอร์ล่างสุด: WebView เล่นวิดีโอ ================= -->
-        <WebView x:Name="BgWebView" 
-                 HorizontalOptions="Fill" 
-                 VerticalOptions="Fill" 
-                 InputTransparent="True" />
+        <!-- ================= 1. เลเยอร์ล่างสุด: รูปพื้นหลัง ================= -->
+        <Image x:Name="BgImage"
+               Source="story/main/main_page_female_bg.png"
+               Aspect="AspectFill"
+               HorizontalOptions="Fill"
+               VerticalOptions="Fill"
+               InputTransparent="True" />
 
         <!-- ================= 2. เลเยอร์ UI หลัก (มี Padding ขอบจอ) ================= -->
         <Grid Padding="15">

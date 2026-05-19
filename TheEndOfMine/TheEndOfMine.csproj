@@ -27,8 +27,8 @@
 		<ApplicationId>com.companyname.theendofmine</ApplicationId>
 
 		<!-- Versions -->
-		<ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
-		<ApplicationVersion>1</ApplicationVersion>
+		<ApplicationDisplayVersion>1.0.2</ApplicationDisplayVersion>
+		<ApplicationVersion>3</ApplicationVersion>
 
 		<!-- To develop, package, and publish an app to the Microsoft Store, see: https://aka.ms/MauiTemplateUnpackaged -->
 		<WindowsPackageType>None</WindowsPackageType>
@@ -44,6 +44,9 @@
 	<PropertyGroup Condition="'$(TargetFramework)' == 'net9.0-android' and '$(Configuration)' == 'Debug'">
 		<!-- Apple Silicon Android emulators use arm64. Keeping Debug single-ABI prevents oversized APKs and signer failures on low disk space. -->
 		<RuntimeIdentifier>android-arm64</RuntimeIdentifier>
+		<!-- Debug builds default to fast deployment. A shared APK must include assemblies and store runtime files uncompressed. -->
+		<EmbedAssembliesIntoApk>true</EmbedAssembliesIntoApk>
+		<AndroidStoreUncompressedFileExtensions>.so;.dll;.pdb;.mdb;.blob;.typemap;$(AndroidStoreUncompressedFileExtensions)</AndroidStoreUncompressedFileExtensions>
 	</PropertyGroup>
 
 	<ItemGroup>
